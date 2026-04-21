@@ -1,0 +1,80 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+
+# Node modules
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# C#/.NET
+bin/
+obj/
+.vs/
+*.csproj.user
+*.sln.user
+
+# Docker
+docker-compose.override.yml
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log
+*.pid
+
+# Uploads
+uploads/
+temp/
+audio_files/
+
+# מודלים מאומנים — לא שייכים לקוד
+services/audio-processor/models/*.pkl
+
+# קבצי הקלטות — פרטיים וכבדים
+*.wav
+*.WAV
+*.mp3
+*.MP3
+
+# React Build
+frontend/quality-learning-dashboard/build/
+frontend/quality-learning-dashboard/dist/
+frontend/quality-learning-dashboard/.env.local

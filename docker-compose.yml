@@ -1,0 +1,179 @@
+# Docker Compose configuration for Quality Learning - Classroom Attention Monitoring System
+# This file orchestrates all microservices and the database
+# Services: API Gateway, Audio Processor, Audio Receiver, Data Service, PostgreSQL Database
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database Service
+  # Stores: Teachers, Classes, RawAudioMeta, ProcessedSegments, DailyReports
+  postgres:
+    image: postgres:15-alpine
+    container_name: quality-learning-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-qualitylearning}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-SecurePassword123!}
+      POSTGRES_DB: ${DB_NAME:-quality_learning}
+    ports:
+      - "5432:5432"
+    volumes:
+      # Volume for persistent database storage
+      - postgres_data:/var/lib/postgresql/data
+      # SQL initialization scripts
+      - ./database/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - quality-learning-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-qualitylearning}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Gateway Service (Node.js/Express)
+  # Routes requests between frontend and backend services
+  # Handles authentication, logging, and request/response transformation
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: quality-learning-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-qualitylearning}
+      DB_PASSWORD: ${DB_PASSWORD:-SecurePassword123!}
+      DB_NAME: ${DB_NAME:-quality_learning}
+      AUDIO_PROCESSOR_URL: http://audio-processor:5000
+      DATA_SERVICE_URL: http://data-service:5001
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - quality-learning-network
+    volumes:
+      # Mount source code for development with hot reload
+      - ./services/api-gateway/src:/app/src
+
+  # Audio Processor Service (Python/FastAPI)
+  # Implements core audio processing algorithms:
+  # - Wiener Filtering for noise reduction
+  # - Voice Activity Detection (VAD)
+  # - RMS energy calculation
+  # - Speaker diarization (single vs multiple speakers)
+  # - Spectral analysis (Spectral Centroid, Spectral Flatness)
+  audio-processor:
+    build:
+      context: ./services/audio-processor
+      dockerfile: Dockerfile
+    container_name: quality-learning-processor
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_ENV: ${FLASK_ENV:-development}
+      FLASK_APP: app.py
+      API_GATEWAY_URL: http://api-gateway:3000
+    depends_on:
+      - api-gateway
+    networks:
+      - quality-learning-network
+    volumes:
+      # Mount source code for development
+      - ./services/audio-processor/src:/app/src
+      # Temporary audio file storage
+      - audio_temp:/app/temp
+
+  # Audio Receiver Service (C# / .NET)
+  # Captures audio from microphone or file input
+  # Manages buffering and queuing for processing
+  # Sends audio data to Audio Processor service
+  audio-receiver:
+    build:
+      context: ./services/audio-receiver
+      dockerfile: Dockerfile
+    container_name: quality-learning-receiver
+    ports:
+      - "5002:5002"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:5002
+      AUDIO_PROCESSOR_URL: http://audio-processor:5000
+      API_GATEWAY_URL: http://api-gateway:3000
+    depends_on:
+      - audio-processor
+    networks:
+      - quality-learning-network
+    volumes:
+      # Mount source code for development
+      - ./services/audio-receiver/src:/app/src
+      # Raw audio file storage
+      - audio_raw:/app/audio
+
+  # Data Service (Node.js/Express)
+  # Manages database operations for:
+  # - Teacher and Class information
+  # - Report generation and statistics
+  # - Historical data retrieval and analytics
+  data-service:
+    build:
+      context: ./services/data-service
+      dockerfile: Dockerfile
+    container_name: quality-learning-data
+    ports:
+      - "5001:5001"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 5001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-qualitylearning}
+      DB_PASSWORD: ${DB_PASSWORD:-SecurePassword123!}
+      DB_NAME: ${DB_NAME:-quality_learning}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - quality-learning-network
+    volumes:
+      - ./services/data-service/src:/app/src
+
+  # Frontend Service (React + TypeScript)
+  # Teacher dashboard for:
+  # - Real-time noise level visualization
+  # - Historical reports and statistics
+  # - Classification of attention levels
+  # - User authentication and profile management
+  frontend:
+    build:
+      context: ./frontend/quality-learning-dashboard
+      dockerfile: Dockerfile
+    container_name: quality-learning-frontend
+    ports:
+      - "3001:3000"
+    environment:
+      REACT_APP_API_URL: http://localhost:3000
+      REACT_APP_ENV: ${REACT_APP_ENV:-development}
+    depends_on:
+      - api-gateway
+    networks:
+      - quality-learning-network
+    volumes:
+      # Mount source code for development
+      - ./frontend/quality-learning-dashboard/src:/app/src
+
+# Named volumes for persistent data storage
+volumes:
+  postgres_data:
+    driver: local
+  audio_temp:
+    driver: local
+  audio_raw:
+    driver: local
+
+# Custom network for service communication
+networks:
+  quality-learning-network:
+    driver: bridge

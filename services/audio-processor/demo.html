@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quality Learning — ניתוח שיעור</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #2563eb, #7c3aed);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { opacity: 0.85; font-size: 15px; }
+        .container { max-width: 960px; margin: 30px auto; padding: 0 20px; }
+
+        /* --- העלאה --- */
+        .upload-area {
+            background: white;
+            border: 3px dashed #cbd5e1;
+            border-radius: 16px;
+            padding: 50px 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover, .upload-area.drag-over {
+            border-color: #2563eb;
+            background: #eff6ff;
+        }
+        .upload-area .icon { font-size: 48px; margin-bottom: 15px; }
+        .upload-area h2 { font-size: 20px; color: #475569; margin-bottom: 8px; }
+        .upload-area p { color: #94a3b8; font-size: 14px; }
+        .upload-area input[type="file"] { display: none; }
+
+        /* --- טעינה --- */
+        .loading { display: none; text-align: center; padding: 60px; }
+        .loading.active { display: block; }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 5px solid #e2e8f0;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* --- תוצאות --- */
+        .results { display: none; }
+        .results.active { display: block; }
+
+        .score-card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        .score-big { font-size: 72px; font-weight: 800; margin: 10px 0; }
+        .score-big.low { color: #ef4444; }
+        .score-big.mid { color: #f59e0b; }
+        .score-big.good { color: #22c55e; }
+        .score-big.great { color: #2563eb; }
+        .grade-label { font-size: 22px; font-weight: 600; margin-bottom: 10px; }
+        .stats-row {
+            display: flex; justify-content: center; gap: 30px;
+            margin-top: 15px; flex-wrap: wrap;
+        }
+        .stat-item { text-align: center; }
+        .stat-item .val { font-size: 24px; font-weight: 700; color: #2563eb; }
+        .stat-item .lbl { font-size: 13px; color: #94a3b8; }
+
+        /* --- גרף --- */
+        .chart-area {
+            background: white; border-radius: 16px; padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 20px;
+        }
+        .chart-area h3 { margin-bottom: 15px; font-size: 18px; }
+        .chart-bar-container {
+            position: relative; height: 200px;
+            display: flex; align-items: flex-end; gap: 1px;
+        }
+        .chart-bar {
+            flex: 1; min-width: 2px; border-radius: 2px 2px 0 0;
+            transition: opacity 0.2s; cursor: pointer; position: relative;
+        }
+        .chart-bar:hover { opacity: 0.8; }
+        .chart-bar .tooltip {
+            display: none; position: absolute; bottom: 105%; left: 50%;
+            transform: translateX(-50%); background: #1e293b; color: white;
+            padding: 5px 10px; border-radius: 6px; font-size: 12px;
+            white-space: nowrap; z-index: 10;
+        }
+        .chart-bar:hover .tooltip { display: block; }
+
+        /* --- כרטיס אימון --- */
+        .train-card {
+            background: linear-gradient(135deg, #fef3c7, #fde68a);
+            border-radius: 16px; padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 20px;
+        }
+        .train-card h3 { font-size: 18px; margin-bottom: 10px; color: #92400e; }
+        .train-card p { font-size: 14px; color: #78350f; margin-bottom: 10px; }
+        .train-stats {
+            display: flex; gap: 20px; margin: 10px 0; flex-wrap: wrap;
+        }
+        .train-stat {
+            background: rgba(255,255,255,0.7); padding: 8px 16px;
+            border-radius: 10px; text-align: center;
+        }
+        .train-stat .num { font-size: 20px; font-weight: 700; color: #92400e; }
+        .train-stat .txt { font-size: 12px; color: #78350f; }
+        .btn-retrain {
+            background: #d97706; color: white; border: none;
+            padding: 10px 25px; border-radius: 10px; font-size: 15px;
+            cursor: pointer; font-weight: 600;
+        }
+        .btn-retrain:hover { background: #b45309; }
+        .btn-retrain:disabled { background: #d4d4d4; cursor: not-allowed; }
+        .train-msg {
+            margin-top: 10px; padding: 8px 12px; border-radius: 8px;
+            font-size: 14px; display: none;
+        }
+        .train-msg.success { display: block; background: #dcfce7; color: #166534; }
+        .train-msg.error { display: block; background: #fee2e2; color: #991b1b; }
+
+        /* --- טבלה --- */
+        .windows-card {
+            background: white; border-radius: 16px; padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-bottom: 20px;
+        }
+        .windows-card h3 { margin-bottom: 5px; font-size: 18px; }
+        .windows-card .subtitle { color: #94a3b8; font-size: 13px; margin-bottom: 15px; }
+        .windows-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .windows-table th {
+            background: #f8fafc; padding: 10px 8px; text-align: right;
+            font-weight: 600; color: #475569; border-bottom: 2px solid #e2e8f0;
+        }
+        .windows-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; }
+        .windows-table tr:hover { background: #f8fafc; }
+        .windows-table tr.corrected { background: #fef9c3; }
+
+        .badge {
+            display: inline-block; padding: 3px 10px;
+            border-radius: 20px; font-size: 12px; font-weight: 600;
+        }
+        .badge-quiet { background: #dcfce7; color: #166534; }
+        .badge-normal { background: #dbeafe; color: #1e40af; }
+        .badge-noisy { background: #fee2e2; color: #991b1b; }
+        .badge-single { background: #dcfce7; color: #166534; }
+        .badge-multi { background: #fef3c7; color: #92400e; }
+        .badge-noise { background: #e2e8f0; color: #475569; }
+
+        .score-cell { font-weight: 700; }
+        .score-cell.low { color: #ef4444; }
+        .score-cell.mid { color: #f59e0b; }
+        .score-cell.good { color: #22c55e; }
+
+        .label-btns { display: flex; gap: 4px; }
+        .label-btn {
+            padding: 4px 10px; border-radius: 6px; border: 2px solid #e2e8f0;
+            font-size: 12px; cursor: pointer; background: white;
+            transition: all 0.2s; font-weight: 500;
+        }
+        .label-btn:hover { border-color: #94a3b8; }
+        .label-btn.sel-single { border-color: #22c55e; background: #dcfce7; color: #166534; }
+        .label-btn.sel-multi { border-color: #f59e0b; background: #fef3c7; color: #92400e; }
+        .label-btn.sel-noise { border-color: #64748b; background: #e2e8f0; color: #475569; }
+        .label-btn.sel-lesson { border-color: #2563eb; background: #dbeafe; color: #1e40af; }
+        .label-btn.sel-disruption { border-color: #ef4444; background: #fee2e2; color: #991b1b; }
+        .sub-btns { display: none; gap: 4px; margin-top: 4px; }
+        .sub-btns.visible { display: flex; }
+
+        .btn-save {
+            background: #22c55e; color: white; border: none;
+            padding: 10px 25px; border-radius: 10px; font-size: 15px;
+            cursor: pointer; font-weight: 600; margin-left: 10px;
+        }
+        .btn-save:hover { background: #16a34a; }
+        .btn-save:disabled { background: #d4d4d4; cursor: not-allowed; }
+        .btn-new {
+            display: inline-block; background: #2563eb; color: white;
+            border: none; padding: 12px 30px; border-radius: 10px;
+            font-size: 16px; cursor: pointer;
+        }
+        .btn-new:hover { background: #1d4ed8; }
+        .text-center { text-align: center; }
+
+        .error-msg {
+            background: #fef2f2; color: #991b1b; padding: 15px 20px;
+            border-radius: 10px; margin: 20px 0; display: none;
+        }
+        .error-msg.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Quality Learning</h1>
+        <p>ניתוח שיעור + למידה מקוונת — העלי קובץ, תקני תיוגים, והמודל ילמד</p>
+    </div>
+
+    <div class="container">
+        <!-- העלאה -->
+        <div id="uploadSection">
+            <div class="upload-area" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                <div class="icon">&#127911;</div>
+                <h2>גררי קובץ שמע לכאן</h2>
+                <p>או לחצי לבחירת קובץ (WAV, MP3)</p>
+                <input type="file" id="fileInput" accept=".wav,.mp3,.ogg,.flac,.m4a">
+            </div>
+            <div id="fileName" style="text-align:center; margin-top:10px; color:#64748b;"></div>
+        </div>
+
+        <!-- טעינה -->
+        <div class="loading" id="loadingSection">
+            <div class="spinner"></div>
+            <p>מנתח את השיעור... (עלול לקחת כמה דקות)</p>
+            <p style="font-size:13px; color:#94a3b8; margin-top:8px;" id="loadingTimer"></p>
+        </div>
+
+        <!-- שגיאה -->
+        <div class="error-msg" id="errorMsg"></div>
+
+        <!-- תוצאות -->
+        <div class="results" id="resultsSection">
+            <!-- ציון -->
+            <div class="score-card">
+                <div class="grade-label" id="gradeLabel"></div>
+                <div style="display:flex; justify-content:center; gap:40px; margin:15px 0;">
+                    <div>
+                        <div class="score-big good" id="positivePct">0%</div>
+                        <div style="color:#22c55e; font-size:16px; font-weight:600;">חיובי</div>
+                    </div>
+                    <div>
+                        <div class="score-big low" id="negativePct">0%</div>
+                        <div style="color:#ef4444; font-size:16px; font-weight:600;">הפרעה</div>
+                    </div>
+                </div>
+                <!-- פירוט סוגים -->
+                <div id="breakdownRow" class="stats-row" style="margin-top:10px;">
+                    <div class="stat-item"><div class="val" style="color:#22c55e;" id="brkSingle">0</div><div class="lbl">דובר יחיד</div></div>
+                    <div class="stat-item"><div class="val" style="color:#2563eb;" id="brkMultiLesson">0</div><div class="lbl">ריבוי לצורך השיעור</div></div>
+                    <div class="stat-item"><div class="val" style="color:#ef4444;" id="brkDisruption">0</div><div class="lbl">הפרעה</div></div>
+                    <div class="stat-item"><div class="val" style="color:#94a3b8;" id="brkNoise">0</div><div class="lbl">רעש (לא נספר)</div></div>
+                </div>
+                <div class="stats-row">
+                    <div class="stat-item"><div class="val" id="statDuration"></div><div class="lbl">משך (דקות)</div></div>
+                    <div class="stat-item"><div class="val" id="statWindows"></div><div class="lbl">סה"כ חלונות</div></div>
+                </div>
+            </div>
+
+            <!-- גרף -->
+            <div class="chart-area">
+                <h3>איכות לאורך השיעור</h3>
+                <!-- מקרא -->
+                <div style="display:flex; gap:20px; margin-bottom:10px; font-size:13px; flex-wrap:wrap;">
+                    <span><span style="display:inline-block;width:14px;height:14px;background:#22c55e;border-radius:3px;vertical-align:middle;margin-left:4px;"></span> דובר יחיד</span>
+                    <span><span style="display:inline-block;width:14px;height:14px;background:#2563eb;border-radius:3px;vertical-align:middle;margin-left:4px;"></span> ריבוי לצורך השיעור</span>
+                    <span><span style="display:inline-block;width:14px;height:14px;background:#ef4444;border-radius:3px;vertical-align:middle;margin-left:4px;"></span> הפרעה</span>
+                    <span><span style="display:inline-block;width:14px;height:14px;background:#cbd5e1;border-radius:3px;vertical-align:middle;margin-left:4px;"></span> רעש</span>
+                </div>
+                <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">גובה = עוצמת הדיבור בחלון</div>
+                <div class="chart-bar-container" id="chartBars"></div>
+            </div>
+
+            <!-- טבלת ניתוח (תמיד גלויה) -->
+            <div class="windows-card">
+                <div>
+                    <h3>פירוט חלונות</h3>
+                    <div class="subtitle">תוצאות הניתוח האוטומטי</div>
+                </div>
+                <div style="max-height: 500px; overflow-y: auto;">
+                    <table class="windows-table">
+                        <thead>
+                            <tr>
+                                <th>זמן</th>
+                                <th>דיבור</th>
+                                <th>עוצמה</th>
+                                <th>דוברים (מודל)</th>
+                                <th>סטטוס</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- כפתור פתיחת אימון -->
+            <div class="text-center" style="margin-bottom:20px;">
+                <button class="btn-new" style="background:#d97706;" id="btnToggleTrain" onclick="toggleTrainSection()">תיקון ואימון המודל</button>
+            </div>
+
+            <!-- אזור אימון (מוסתר כברירת מחדל) -->
+            <div id="trainSection" style="display:none;">
+                <div class="train-card">
+                    <h3>למידה מקוונת</h3>
+                    <p>תקני את התיוגים בטבלה למטה, לחצי "שמור ואמן" — ואז "נתח מחדש" כדי לראות אם השתפר.</p>
+                    <div class="train-stats">
+                        <div class="train-stat"><div class="num" id="trainTotal">0</div><div class="txt">דוגמאות מתויגות</div></div>
+                        <div class="train-stat"><div class="num" id="trainSingle">0</div><div class="txt">דובר יחיד</div></div>
+                        <div class="train-stat"><div class="num" id="trainMulti">0</div><div class="txt">ריבוי דוברים</div></div>
+                        <div class="train-stat"><div class="num" id="trainNoise">0</div><div class="txt">רעש</div></div>
+                        <div class="train-stat"><div class="num" id="trainCtxLesson">0</div><div class="txt">לצורך השיעור</div></div>
+                        <div class="train-stat"><div class="num" id="trainCtxDisrupt">0</div><div class="txt">הפרעה</div></div>
+                        <div class="train-stat"><div class="num" id="trainCorrected">0</div><div class="txt">תוקנו עכשיו</div></div>
+                    </div>
+                    <button class="btn-save" id="btnTrain" onclick="saveAndTrain()">שמור ואמן</button>
+                    <button class="btn-new" id="btnReanalyze" onclick="reanalyze()" style="display:none; margin-right:10px;">נתח מחדש</button>
+                    <div class="train-msg" id="trainMsg"></div>
+                </div>
+
+                <!-- טבלת תיקונים -->
+                <div class="windows-card">
+                    <div>
+                        <h3>תיקון תיוגים</h3>
+                        <div class="subtitle">לחצי על "יחיד"/"ריבוי"/"רעש" לתיקון. בריבוי — בחרי אם זה לצורך השיעור או הפרעה</div>
+                    </div>
+                    <div style="max-height: 500px; overflow-y: auto;">
+                        <table class="windows-table">
+                            <thead>
+                                <tr>
+                                    <th>זמן</th>
+                                    <th>דוברים (מודל)</th>
+                                    <th>סטטוס</th>
+                                    <th>תיקון</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trainTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ניתוח חדש -->
+            <div class="text-center">
+                <button class="btn-new" onclick="resetPage()">ניתוח שיעור חדש</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const uploadSection = document.getElementById('uploadSection');
+        const loadingSection = document.getElementById('loadingSection');
+        const resultsSection = document.getElementById('resultsSection');
+        const errorMsg = document.getElementById('errorMsg');
+
+        let windowsData = [];
+        let corrections = {};
+
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault(); dropZone.classList.remove('drag-over');
+            if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', () => { if (fileInput.files.length > 0) handleFile(fileInput.files[0]); });
+
+        function handleFile(file) {
+            document.getElementById('fileName').textContent = file.name;
+            uploadSection.style.display = 'none';
+            loadingSection.classList.add('active');
+            errorMsg.classList.remove('active');
+            corrections = {};
+
+            let seconds = 0;
+            const timer = setInterval(() => {
+                seconds++;
+                const m = Math.floor(seconds / 60), s = seconds % 60;
+                document.getElementById('loadingTimer').textContent =
+                    m > 0 ? `${m}:${s.toString().padStart(2,'0')} דקות` : `${s} שניות`;
+            }, 1000);
+
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            fetch('/analyze', { method: 'POST', body: formData })
+                .then(r => r.json())
+                .then(data => {
+                    clearInterval(timer);
+                    loadingSection.classList.remove('active');
+                    if (data.error) showError(data.error);
+                    else showResults(data);
+                })
+                .catch(err => {
+                    clearInterval(timer);
+                    loadingSection.classList.remove('active');
+                    showError('שגיאה: ' + err.message);
+                });
+        }
+
+        function showError(msg) {
+            uploadSection.style.display = 'block';
+            errorMsg.textContent = msg;
+            errorMsg.classList.add('active');
+        }
+
+        function showResults(data) {
+            console.log('showResults data:', JSON.stringify(data).substring(0, 500));
+            resultsSection.classList.add('active');
+            windowsData = data.windows;
+
+            const posPct = (data.positive_pct !== undefined && data.positive_pct !== null) ? data.positive_pct : 0;
+            const negPct = (data.negative_pct !== undefined && data.negative_pct !== null) ? data.negative_pct : 0;
+            console.log('posPct:', posPct, 'negPct:', negPct);
+            document.getElementById('positivePct').textContent = posPct + '%';
+            document.getElementById('negativePct').textContent = negPct + '%';
+            document.getElementById('gradeLabel').textContent = data.grade || '';
+            document.getElementById('statDuration').textContent = data.duration_min || 0;
+            document.getElementById('statWindows').textContent = data.windows.length;
+
+            // פירוט סוגים
+            if (data.breakdown) {
+                const b = data.breakdown;
+                document.getElementById('brkSingle').textContent = b.single;
+                document.getElementById('brkMultiLesson').textContent = b.multi_lesson;
+                document.getElementById('brkDisruption').textContent = b.disruption;
+                document.getElementById('brkNoise').textContent = b.noise;
+            }
+
+            document.getElementById('trainTotal').textContent = data.labeled_count || 0;
+            updateCorrectionCount();
+
+            // גרף — גובה לפי עוצמת דיבור, צבע לפי סוג
+            const chart = document.getElementById('chartBars');
+            chart.innerHTML = '';
+            data.windows.forEach(w => {
+                const bar = document.createElement('div');
+                bar.className = 'chart-bar';
+                // גובה יחסי לפי speech_ratio (0-100%)
+                const h = Math.max(10, Math.round(w.speech_ratio / 100 * 190));
+                bar.style.height = h + 'px';
+
+                if (w.is_noise) {
+                    bar.style.background = '#cbd5e1';
+                } else if (w.label === '\u05d4\u05e4\u05e8\u05e2\u05d4') {
+                    bar.style.background = '#ef4444';
+                } else if (w.speaker_type === '\u05d3\u05d5\u05d1\u05e8_\u05d9\u05d7\u05d9\u05d3') {
+                    bar.style.background = '#22c55e';
+                } else {
+                    bar.style.background = '#2563eb'; // ריבוי לצורך השיעור
+                }
+                const tip = document.createElement('div');
+                tip.className = 'tooltip';
+                tip.textContent = `${fmtTime(w.start)} | ${w.label} | ${w.speaker_type} | ${w.speech_ratio}%`;
+                bar.appendChild(tip);
+                chart.appendChild(bar);
+            });
+
+            renderTable();
+
+            fetch('/stats').then(r => r.json()).then(s => {
+                document.getElementById('trainTotal').textContent = s.total;
+                document.getElementById('trainSingle').textContent = s.single_count;
+                document.getElementById('trainMulti').textContent = s.multi_count;
+                document.getElementById('trainNoise').textContent = s.noise_count || 0;
+                document.getElementById('trainCtxLesson').textContent = s.ctx_lesson || 0;
+                document.getElementById('trainCtxDisrupt').textContent = s.ctx_disruption || 0;
+            });
+        }
+
+        function renderTable() {
+            // טבלת ניתוח (ללא כפתורי תיקון)
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            windowsData.forEach(w => {
+                const tr = document.createElement('tr');
+                const rmsBadge = w.rms_level === '\u05e9\u05e7\u05d8' ? 'quiet' : (w.rms_level === '\u05e8\u05d2\u05d9\u05dc' ? 'normal' : 'noisy');
+                const spkBadge = w.speaker_type === '\u05d3\u05d5\u05d1\u05e8_\u05d9\u05d7\u05d9\u05d3' ? 'single' : (w.speaker_type === '\u05e8\u05e2\u05e9' ? 'noise' : 'multi');
+                const spkLabel = w.speaker_type === '\u05e8\u05e2\u05e9' ? '\u05e8\u05e2\u05e9' : w.speaker_type;
+                let statusHtml;
+                if (w.is_noise) {
+                    statusHtml = '<span class="badge badge-noise">\u05e8\u05e2\u05e9</span>';
+                } else if (w.label === '\u05d7\u05d9\u05d5\u05d1\u05d9') {
+                    statusHtml = '<span class="badge badge-quiet">\u05d7\u05d9\u05d5\u05d1\u05d9</span>';
+                } else {
+                    statusHtml = '<span class="badge badge-noisy">\u05d4\u05e4\u05e8\u05e2\u05d4</span>';
+                }
+                tr.innerHTML = `
+                    <td>${fmtTime(w.start)}-${fmtTime(w.end)}</td>
+                    <td>${w.speech_ratio}%</td>
+                    <td><span class="badge badge-${rmsBadge}">${w.rms_level}</span></td>
+                    <td><span class="badge badge-${spkBadge}">${spkLabel}</span></td>
+                    <td>${statusHtml}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            // עדכון גם טבלת אימון אם פתוחה
+            renderTrainTable();
+        }
+
+        function renderTrainTable() {
+            const tbody = document.getElementById('trainTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            windowsData.forEach(w => {
+                const tr = document.createElement('tr');
+                if (corrections[w.idx] !== undefined) tr.classList.add('corrected');
+                const spkBadge = w.speaker_type === '\u05d3\u05d5\u05d1\u05e8_\u05d9\u05d7\u05d9\u05d3' ? 'single' : (w.speaker_type === '\u05e8\u05e2\u05e9' ? 'noise' : 'multi');
+                const spkLabel = w.speaker_type === '\u05e8\u05e2\u05e9' ? '\u05e8\u05e2\u05e9' : w.speaker_type;
+                const selSingle = corrections[w.idx] === 'single' ? ' sel-single' : '';
+                const selMultiLesson = corrections[w.idx] === 'multiple_lesson' ? ' sel-multi' : '';
+                const selMultiDisrupt = corrections[w.idx] === 'multiple_disruption' ? ' sel-multi' : '';
+                const selNoise = corrections[w.idx] === 'noise' ? ' sel-noise' : '';
+                const showSub = (corrections[w.idx] === 'multiple_lesson' || corrections[w.idx] === 'multiple_disruption' || corrections[w.idx] === '_pick_multi') ? 'visible' : '';
+                let statusHtml;
+                if (w.is_noise) {
+                    statusHtml = '<span class="badge badge-noise">\u05e8\u05e2\u05e9</span>';
+                } else if (w.label === '\u05d7\u05d9\u05d5\u05d1\u05d9') {
+                    statusHtml = '<span class="badge badge-quiet">\u05d7\u05d9\u05d5\u05d1\u05d9</span>';
+                } else {
+                    statusHtml = '<span class="badge badge-noisy">\u05d4\u05e4\u05e8\u05e2\u05d4</span>';
+                }
+                tr.innerHTML = `
+                    <td>${fmtTime(w.start)}-${fmtTime(w.end)}</td>
+                    <td><span class="badge badge-${spkBadge}">${spkLabel}</span></td>
+                    <td>${statusHtml}</td>
+                    <td>
+                        <div class="label-btns">
+                            <button class="label-btn${selSingle}" onclick="setLabel(${w.idx},'single')">\u05d9\u05d7\u05d9\u05d3</button>
+                            <button class="label-btn${selMultiLesson || selMultiDisrupt ? ' sel-multi' : ''}" onclick="toggleMultiSub(${w.idx})">\u05e8\u05d9\u05d1\u05d5\u05d9</button>
+                            <button class="label-btn${selNoise}" onclick="setLabel(${w.idx},'noise')">\u05e8\u05e2\u05e9</button>
+                        </div>
+                        <div class="sub-btns ${showSub}" id="sub-${w.idx}">
+                            <button class="label-btn${corrections[w.idx]==='multiple_lesson' ? ' sel-lesson' : ''}" onclick="setLabel(${w.idx},'multiple_lesson')">\u05dc\u05e6\u05d5\u05e8\u05da \u05d4\u05e9\u05d9\u05e2\u05d5\u05e8</button>
+                            <button class="label-btn${corrections[w.idx]==='multiple_disruption' ? ' sel-disruption' : ''}" onclick="setLabel(${w.idx},'multiple_disruption')">\u05d4\u05e4\u05e8\u05e2\u05d4</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function toggleTrainSection() {
+            const sec = document.getElementById('trainSection');
+            const btn = document.getElementById('btnToggleTrain');
+            if (sec.style.display === 'none') {
+                sec.style.display = 'block';
+                btn.textContent = 'הסתר אימון';
+                renderTrainTable();
+            } else {
+                sec.style.display = 'none';
+                btn.textContent = 'תיקון ואימון המודל';
+            }
+        }
+
+        function setLabel(idx, label) {
+            if (corrections[idx] === label) delete corrections[idx];
+            else corrections[idx] = label;
+            renderTrainTable();
+            updateCorrectionCount();
+        }
+
+        function toggleMultiSub(idx) {
+            if (corrections[idx] === 'multiple_lesson' || corrections[idx] === 'multiple_disruption') {
+                delete corrections[idx];
+            } else {
+                corrections[idx] = '_pick_multi';
+            }
+            renderTrainTable();
+            updateCorrectionCount();
+        }
+
+        function updateCorrectionCount() {
+            const real = Object.values(corrections).filter(v => v !== '_pick_multi').length;
+            document.getElementById('trainCorrected').textContent = real;
+        }
+
+        function saveAndTrain() {
+            const list = Object.entries(corrections)
+                .filter(([_, label]) => label !== '_pick_multi')
+                .map(([idx, label]) => ({ idx: parseInt(idx), label }));
+
+            const btn = document.getElementById('btnTrain');
+            const msgEl = document.getElementById('trainMsg');
+            btn.disabled = true; btn.textContent = 'שומר ומאמן...';
+            msgEl.className = 'train-msg'; msgEl.style.display = 'none';
+
+            fetch('/train', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ corrections: list })
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false; btn.textContent = 'שמור ואמן';
+                if (data.error) {
+                    msgEl.textContent = data.error; msgEl.className = 'train-msg error';
+                } else {
+                    msgEl.textContent = data.save_msg + ' | ' + data.train_msg;
+                    msgEl.className = 'train-msg success';
+                    corrections = {}; updateCorrectionCount(); renderTable();
+                    // הצג כפתור "נתח מחדש"
+                    document.getElementById('btnReanalyze').style.display = 'inline-block';
+                }
+                // עדכון סטטיסטיקות
+                fetch('/stats').then(r => r.json()).then(s => {
+                    document.getElementById('trainTotal').textContent = s.total;
+                    document.getElementById('trainSingle').textContent = s.single_count;
+                    document.getElementById('trainMulti').textContent = s.multi_count;
+                    document.getElementById('trainNoise').textContent = s.noise_count || 0;
+                    document.getElementById('trainCtxLesson').textContent = s.ctx_lesson || 0;
+                    document.getElementById('trainCtxDisrupt').textContent = s.ctx_disruption || 0;
+                });
+            })
+            .catch(err => {
+                btn.disabled = false; btn.textContent = 'שמור ואמן';
+                msgEl.textContent = 'שגיאה: ' + err.message; msgEl.className = 'train-msg error';
+            });
+        }
+
+        function reanalyze() {
+            const btn = document.getElementById('btnReanalyze');
+            const msgEl = document.getElementById('trainMsg');
+            btn.disabled = true; btn.textContent = 'מנתח מחדש...';
+            msgEl.className = 'train-msg'; msgEl.style.display = 'none';
+
+            fetch('/reanalyze', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false; btn.textContent = 'נתח מחדש';
+                if (data.error) {
+                    msgEl.textContent = data.error; msgEl.className = 'train-msg error';
+                } else {
+                    showResults(data);
+                    msgEl.textContent = 'ניתוח מחדש הושלם — בדקי את התוצאות המעודכנות';
+                    msgEl.className = 'train-msg success';
+                }
+            })
+            .catch(err => {
+                btn.disabled = false; btn.textContent = 'נתח מחדש';
+                msgEl.textContent = 'שגיאה: ' + err.message; msgEl.className = 'train-msg error';
+            });
+        }
+
+        function fmtTime(sec) { return Math.floor(sec/60) + ':' + Math.floor(sec%60).toString().padStart(2,'0'); }
+        function resetPage() {
+            resultsSection.classList.remove('active');
+            uploadSection.style.display = 'block';
+            fileInput.value = '';
+            document.getElementById('fileName').textContent = '';
+            corrections = {};
+            document.getElementById('trainMsg').style.display = 'none';
+            document.getElementById('trainSection').style.display = 'none';
+            document.getElementById('btnToggleTrain').textContent = 'תיקון ואימון המודל';
+        }
+    </script>
+</body>
+</html>
