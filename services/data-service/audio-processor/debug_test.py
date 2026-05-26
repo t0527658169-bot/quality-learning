@@ -1,3 +1,9 @@
+# ===================================================
+# debug_test.py — DISABLED (data-service — גרסה ישנה)
+# *** קובץ זה שייך לגרסה הישנה לפני HEBERT ***
+# *** ניתן למחוק את תיקיית data-service/audio-processor כולה ***
+# ===================================================
+
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from main_pipeline import AudioPipeline
@@ -20,3 +26,7 @@ ls = r['lesson_score']
 print(f"\npos={ls['positive_pct']}%  neg={ls['negative_pct']}%  noise={ls['noise_count']}  relevant={ls['total_relevant']}")
 
 
+# ===================================================
+# DISABLED: הקוד מעל אינו פעיל
+# ===================================================
+raise SystemExit(f"[DISABLED] debug_test.py — גרסה ישנה, אינו פעיל")

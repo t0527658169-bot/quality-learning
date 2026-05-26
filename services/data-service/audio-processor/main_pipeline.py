@@ -1,4 +1,10 @@
 # ===================================================
+# main_pipeline.py — DISABLED (data-service — גרסה ישנה)
+# *** קובץ זה שייך לגרסה הישנה לפני HEBERT ***
+# *** ניתן למחוק את תיקיית data-service/audio-processor כולה ***
+# ===================================================
+
+# ===================================================
 # main_pipeline.py — צנרת העיבוד הראשית
 # ===================================================
 # מרכיב את כל האלגוריתמים לתהליך עיבוד רציף:
@@ -23,7 +29,6 @@
 import numpy as np
 import soundfile as sf
 from scipy.signal import resample_poly
-from collections import deque
 from typing import Dict, List
 
 from config import SAMPLE_RATE, WINDOW_DURATION_SEC
@@ -32,7 +37,7 @@ from vad_detector import VADDetector
 from rms_analyzer import RMSAnalyzer
 from audio_classifier import AudioClassifier
 from overlap_detector import OverlapDetector
-from hebert_context_analyzer import HEBERTContextAnalyzer
+from context_analyzer import ContextAnalyzer
 from attention_scorer import AttentionScorer
 
 
@@ -47,7 +52,7 @@ class AudioPipeline:
         self.rms = RMSAnalyzer(sample_rate)
         self.classifier = AudioClassifier(sample_rate)
         self.overlap = OverlapDetector(sample_rate)
-        self.context = HEBERTContextAnalyzer(sample_rate)  # ← HEBERT במקום ContextAnalyzer
+        self.context = ContextAnalyzer(sample_rate)
         self.scorer = AttentionScorer()
 
     # ------- טעינת קובץ שמע -------
@@ -96,9 +101,6 @@ class AudioPipeline:
         # מכונת מצבים: None = רגיל, 'lesson' = לצורך השיעור, 'disruption' = הפרעה
         multi_state = None
 
-        # בפר של 2 חלוני דובר-יחיד אחרונים (לזיהוי שאלה על פני 2 חלונות)
-        prev_single_chunks: deque = deque(maxlen=2)
-
         # כותרת טבלה
         print(f"\n  {'זמן':<16} | {'דיבור':>6} | {'עוצמה':<6} | {'דוברים':<14} | {'סטטוס':>6}")
         print(f"  {'-'*55}")
@@ -114,11 +116,8 @@ class AudioPipeline:
 
             # ניתוח החלון עם מכונת המצבים
             result, multi_state = self._analyze_window_stateful(
-                chunk, raw_audio, i, start_sec, end_sec, multi_state, prev_single_chunks
+                chunk, raw_audio, i, start_sec, end_sec, multi_state
             )
-            # שמירת חלון דובר-יחיד בבפר לניתוח הקשרי של חלון הבא
-            if result['speaker_type'] == 'דובר_יחיד' and result['has_speech']:
-                prev_single_chunks.append(chunk)
             results.append(result)
             labels.append(result['attention_label'])
 
@@ -140,13 +139,14 @@ class AudioPipeline:
         }
 
     # ------- ניתוח חלון עם מכונת מצבים -------
-    def _analyze_window_stateful(self, chunk, raw_audio, offset, start_sec, end_sec, multi_state, prev_single_chunks: deque = None):
+    def _analyze_window_stateful(self, chunk, raw_audio, offset, start_sec, end_sec, multi_state):
         """
         ניתוח חלון עם מכונת מצבים לריבוי דוברים.
 
         סדר עדיפויות לקביעת הקשר ריבוי דוברים:
-          1. מכונת מצבים (HEBERT Trigger) — עדיפות ראשונה
-          2. ניתוח HEBERT ישיר — גיבוי
+          1. מודל RF מאומן מתיקוני המשתמש (אם קיים) — עדיפות ראשונה
+          2. מכונת מצבים (שאלה פתוחה / מילות השתקה) — משלים
+          3. ניתוח ASR + מודל טקסט — גיבוי
 
         מצבים:
           None         = רגיל
@@ -155,8 +155,8 @@ class AudioPipeline:
 
         מעברי מצב:
           1. דובר יחיד + שאלה פתוחה/הנחיה → lesson
-          2. דובר יחיד + מילות השתקה → disruption
-          3. דובר יחיד (רגיל, ללא trigger) → איפוס ל-None
+          2. ריבוי + מילות השתקה → disruption
+          3. דובר יחיד (רגיל, ללא שאלה) → איפוס ל-None
         """
         # [3] VAD: האם יש דיבור בחלון?
         speech_ratio = self.vad.get_speech_ratio(chunk)
@@ -168,10 +168,10 @@ class AudioPipeline:
         # [5] סיווג אקוסטי: מה סוג הצליל?
         audio_type, audio_conf = self.classifier.classify(chunk)
 
-        # [6] זיהוי חפיפת דוברים (מודל Random Forest)
+        # [6] זיהוי חפיפת דוברים
         speaker_type, overlap_score = self.overlap.detect(chunk)
 
-        # [7] ניתוח הקשרי — HEBERT + מכונת מצבים
+        # [7] ניתוח הקשרי — משולב: מודל מאומן + מכונת מצבים
         context_result = {
             'context_category': 'לא_ידוע',
             'confidence': 0,
@@ -181,71 +181,62 @@ class AudioPipeline:
         new_state = multi_state
 
         if speaker_type == 'דובר_יחיד' and has_speech:
-            # דובר יחיד — בדיקה עם HEBERT Trigger Classifier
-            trigger_type, trigger_conf = self.context.analyze_trigger(chunk)
-            
-            if trigger_type == "שאלה_פתוחה" and trigger_conf > 0.5:
+            # דובר יחיד — בדיקה אם יש שאלה פתוחה שתפעיל מצב "לצורך השיעור"
+            if self.context.has_open_question(chunk):
                 new_state = 'lesson'
                 context_result['context_category'] = 'פתיחה_לדיון'
-                context_result['confidence'] = trigger_conf
-            
-            elif trigger_type == "ניסיון_השתקה" and trigger_conf > 0.5:
-                new_state = 'disruption'
-                context_result['context_category'] = 'הפרעה'
-                context_result['confidence'] = trigger_conf
-            
+                context_result['confidence'] = 0.9
             else:
-                # דובר יחיד רגיל — איפוס מצב
-                new_state = None
+                # ניסיון עם מודל trigger — לומד מתיקוני המשתמש
+                trigger_pred = self.context.predict_trigger(chunk)
+                if trigger_pred is not None:
+                    new_state = trigger_pred
+                else:
+                    # דובר יחיד רגיל — איפוס מצב
+                    new_state = None
 
         elif speaker_type == 'ריבוי_דוברים' and has_speech:
             # --- עיקרון: state נקבע מחלון דובר יחיד (המורה) ---
             # כל עוד יש ריבוי דוברים רצוף, ממשיכים את ה-state.
+            # ASR לא אמין על ריבוי דוברים, לכן לא בודקים מילות מפתח כאן.
+            # ה-state משתנה רק כשמגיע חלון דובר יחיד חדש.
 
             if multi_state == 'lesson':
                 # רצף ריבוי שהתחיל אחרי שאלה פתוחה → לצורך השיעור
-                # אבל: גם בתוך הלולאה בודקים אם המורה ניסתה להשתיק
-                trigger_type, trigger_conf = self.context.analyze_trigger(chunk)
-                if trigger_type == "ניסיון_השתקה" and trigger_conf > 0.5:
-                    # מצאנו מילת השתקה בתוך הריבוי → יוצאים מהלולאה
-                    new_state = 'disruption'
-                    context_result['context_category'] = 'הפרעה'
-                    context_result['confidence'] = trigger_conf
-                else:
-                    context_result['context_category'] = 'למידה_פעילה'
-                    context_result['confidence'] = 0.9
-
+                context_result['context_category'] = 'למידה_פעילה'
+                context_result['confidence'] = 0.9
             elif multi_state == 'disruption':
                 # רצף ריבוי שהתחיל אחרי הפרעה → הפרעה
                 context_result['context_category'] = 'הפרעה'
                 context_result['confidence'] = 0.9
-            
-            else:
-                # אין state — בודקים קודם אם 2 החלונות הקודמים יחד מכילים שאלה/הנחיה
-                trigger_type, trigger_conf = None, 0.0
-                if prev_single_chunks:
-                    # מאחדים עד 2 חלוני דובר-יחיד קודמים עם החלון הנוכחי
-                    combined = np.concatenate(list(prev_single_chunks) + [chunk])
-                    trigger_type, trigger_conf = self.context.analyze_trigger(combined)
 
-                if trigger_type == "שאלה_פתוחה" and trigger_conf > 0.5:
+            # --- אין state? מודל RF מאומן מתיקוני המשתמש ---
+            elif self.context.rf_model is not None:
+                context_result = self.context._analyze_with_rf(chunk)
+                if context_result['context_category'] in ('למידה_פעילה', 'פתיחה_לדיון'):
+                    new_state = 'lesson'
+                elif context_result['context_category'] == 'הפרעה':
+                    new_state = 'disruption'
+
+            # --- מודל trigger — חלון קודם מנבא הקשר ---
+            elif self.context.trigger_model is not None:
+                trigger_pred = self.context.predict_trigger(chunk)
+                if trigger_pred == 'lesson':
                     new_state = 'lesson'
                     context_result['context_category'] = 'למידה_פעילה'
-                    context_result['confidence'] = trigger_conf
-                elif trigger_type == "ניסיון_השתקה" and trigger_conf > 0.5:
+                    context_result['confidence'] = 0.8
+                elif trigger_pred == 'disruption':
                     new_state = 'disruption'
                     context_result['context_category'] = 'הפרעה'
-                    context_result['confidence'] = trigger_conf
-                else:
-                    # אין עדות לשאלה — ניתוח ישיר עם HEBERT
-                    hebert_result = self.context.analyze_context(chunk)
-                    context_result = hebert_result
+                    context_result['confidence'] = 0.8
 
-                    # עדכון state לפי התוצאה
-                    if context_result['context_category'] in ('למידה_פעילה', 'פתיחה_לדיון'):
-                        new_state = 'lesson'
-                    elif context_result['context_category'] == 'הפרעה':
-                        new_state = 'disruption'
+            # --- ניתוח ASR רגיל (גיבוי אחרון) ---
+            else:
+                lookback_samples = int(5 * self.sr)
+                start_idx = max(0, offset - lookback_samples)
+                preceding = raw_audio[start_idx:offset]
+                if len(preceding) > self.sr:
+                    context_result = self.context.analyze(preceding)
 
         # [8] סיווג איכות חלון
         score_input = {
@@ -291,3 +282,9 @@ class AudioPipeline:
             status = "הפרעה"
         print(f"  {icon} {time_str} | {r['speech_ratio']:5.0%} | {r['rms_level']:<6} | "
               f"{r['speaker_type']:<14} | {status}")
+
+
+# ===================================================
+# DISABLED: הקוד מעל אינו פעיל
+# ===================================================
+raise SystemExit(f"[DISABLED] main_pipeline.py — גרסה ישנה, אינו פעיל")

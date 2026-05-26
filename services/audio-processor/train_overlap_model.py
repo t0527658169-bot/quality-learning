@@ -235,3 +235,5 @@ def train_model(n_samples: int = 1000):
 
 if __name__ == "__main__":
     train_model(n_samples=500)
+
+

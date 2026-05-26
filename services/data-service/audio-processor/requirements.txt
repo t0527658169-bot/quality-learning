@@ -4,13 +4,7 @@
 numpy>=1.21.0
 scipy>=1.7.0
 soundfile>=0.11.0
+SpeechRecognition>=3.8.0
 pyodbc>=4.0.0
 scikit-learn>=1.0.0
 matplotlib>=3.4.0
-
-# ASR - Whisper (OpenAI) for Hebrew transcription
-openai-whisper>=20231117
-
-# HEBERT - Hebrew BERT for context analysis
-torch>=2.0.0
-transformers>=4.30.0
