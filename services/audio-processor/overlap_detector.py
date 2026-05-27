@@ -104,7 +104,30 @@ class OverlapDetector:
             spectral_flux                                              # spectral_flux
         ])
 
-    def detect(self, audio: np.ndarray) -> Tuple[str, float]:
+    # ===========================================================
+    # כיול per-recording (נוסף כעת) — ללא ML
+    # מחשב את סף ה-harm באופן יחסי להקלטה עצמה:
+    # לוקח את ה-percentile 75 של ערכי harm מכל חלוני הדיבור.
+    # כך הקלטה עם אקוסטיקה שונה (מיקרופון רחוק, הד) מקבלת
+    # סף מותאם במקום סף קבוע 0.70.
+    # ===========================================================
+    def calibrate(self, audio: np.ndarray, window_samples: int) -> float:
+        sig = self._normalize(audio)
+        harm_vals = []
+        for i in range(0, len(sig) - window_samples, window_samples):
+            chunk = sig[i:i + window_samples]
+            rms_val = float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2)))
+            if rms_val < NOISE_RMS_FLOOR:
+                continue
+            harm_vals.append(self._compute_harmonicity(chunk))
+        if len(harm_vals) < 3:
+            return 0.70  # ברירת מחדל אם אין מספיק חלונות
+        threshold = float(np.percentile(harm_vals, 60))
+        # גבול עליון ותחתון — מניעת ערכים קיצוניים
+        threshold = max(0.50, min(0.85, threshold))
+        return round(threshold, 3)
+
+    def detect(self, audio: np.ndarray, harm_threshold: float = 0.70) -> Tuple[str, float]:
         sig = self._normalize(audio)
 
         # בדיקת רעש
@@ -119,20 +142,23 @@ class OverlapDetector:
         energy_cv      = f[0]
         bandwidth_norm = f[1]
         flatness_std   = f[2]
+        zcr_std        = f[3]  # נוסף חזרה לניקוד — ZCR יציב יותר מ-bandwidth באקוסטיקות שונות
 
         kurtosis = self._compute_kurtosis(sig)
 
-        # ===== ניקוד משוקלל  =====
-        # שונות אנרגיה (40%) + רוחב פס (30%) + שונות שטחיות (30%)
+        # ===== ניקוד משוקלל (עודכן: ZCR במקום bandwidth) =====
+        # שונות אנרגיה (35%) + ZCR std (30%) + שונות שטחיות (25%) + רוחב פס (10%)
+        # bandwidth_norm הורד כי מושפע מאקוסטיקת חדר; zcr_std יציב יותר
         overlap_score = min(1.0, (
-            0.4 * energy_cv +
-            0.3 * bandwidth_norm +
-            0.3 * flatness_std * 10
+            0.35 * energy_cv +
+            0.30 * zcr_std * 20 +
+            0.25 * flatness_std * 10 +
+            0.10 * bandwidth_norm
         ))
 
         print(
-            f"    [OD] kurt={kurtosis:.2f} e_cv={energy_cv:.3f} bw={bandwidth_norm:.3f} "
-            f"flat_std={flatness_std:.3f} score={overlap_score:.3f}/{OVERLAP_THRESHOLD}",
+            f"    [OD] kurt={kurtosis:.2f} e_cv={energy_cv:.3f} zcr_std={zcr_std:.3f} "
+            f"bw={bandwidth_norm:.3f} flat_std={flatness_std:.3f} score={overlap_score:.3f}/{OVERLAP_THRESHOLD}",
             file=sys.stderr
         )
 
@@ -141,10 +167,13 @@ class OverlapDetector:
         #     conf = round(min(0.95, 0.60 + (KURTOSIS_SINGLE_VETO - kurtosis) * 0.15), 3)
         #     return self.SINGLE, conf
         harmonicity = self._compute_harmonicity(sig)
-        print(f"    [OD] harm={harmonicity:.2f}", file=sys.stderr)
+        print(f"    [OD] harm={harmonicity:.2f} (singleThresh={harm_threshold:.2f})", file=sys.stderr)
+        if harmonicity < 0.45 and kurtosis < KURTOSIS_SINGLE_VETO:
+           return self.NOISE, 0.90
 
         # veto רק אם גם kurtosis נמוך וגם הגל תקופתי (harmonicity גבוה)
-        if kurtosis < KURTOSIS_SINGLE_VETO and harmonicity > 0.7:
+        # harm_threshold מגיע מכיול per-recording (ולא קבוע 0.70)
+        if kurtosis < KURTOSIS_SINGLE_VETO and harmonicity > harm_threshold:
             conf = round(min(0.95, 0.60 + harmonicity * 0.35), 3)
             return self.SINGLE, conf
 

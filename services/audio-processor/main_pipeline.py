@@ -19,7 +19,7 @@
 #   [8] ממוצע משוקלל — ציון קשב לחלון
 #     ↓
 #   ציון כולל לשיעור
-
+import sys
 import numpy as np
 import soundfile as sf
 from scipy.signal import resample_poly
@@ -96,6 +96,15 @@ class AudioPipeline:
         # מכונת מצבים: None = רגיל, 'lesson' = לצורך השיעור, 'disruption' = הפרעה
         multi_state = None
 
+        # ===========================================================
+        # כיול per-recording (נוסף כעת) — ללא ML
+        # מחשב סף harm יחסי להקלטה זו לפני עיבוד החלונות.
+        # מונע הטיה מאקוסטיקת חדר שונה (מיקרופון רחוק, הד).
+        # ===========================================================
+        window_samples_cal = int(WINDOW_DURATION_SEC * self.sr)
+        harm_threshold = self.overlap.calibrate(clean_audio, window_samples_cal)
+        print(f"  [OD] כיול per-recording: harm_threshold={harm_threshold:.2f}", file=sys.stderr)
+
         # בפר של 2 חלוני דובר-יחיד אחרונים (לזיהוי שאלה על פני 2 חלונות)
         prev_single_chunks: deque = deque(maxlen=2)
 
@@ -114,7 +123,7 @@ class AudioPipeline:
 
             # ניתוח החלון עם מכונת המצבים
             result, multi_state = self._analyze_window_stateful(
-                chunk, raw_audio, i, start_sec, end_sec, multi_state, prev_single_chunks
+                chunk, raw_audio, i, start_sec, end_sec, multi_state, prev_single_chunks, harm_threshold
             )
             # שמירת חלון דובר-יחיד בבפר לניתוח הקשרי של חלון הבא
             if result['speaker_type'] == 'דובר_יחיד' and result['has_speech']:
@@ -140,7 +149,7 @@ class AudioPipeline:
         }
 
     # ------- ניתוח חלון עם מכונת מצבים -------
-    def _analyze_window_stateful(self, chunk, raw_audio, offset, start_sec, end_sec, multi_state, prev_single_chunks: deque = None):
+    def _analyze_window_stateful(self, chunk, raw_audio, offset, start_sec, end_sec, multi_state, prev_single_chunks: deque = None, harm_threshold: float = 0.70):
         """
         ניתוח חלון עם מכונת מצבים לריבוי דוברים.
 
@@ -168,8 +177,12 @@ class AudioPipeline:
         # [5] סיווג אקוסטי: מה סוג הצליל?
         audio_type, audio_conf = self.classifier.classify(chunk)
 
-        # [6] זיהוי חפיפת דוברים (מודל Random Forest)
-        speaker_type, overlap_score = self.overlap.detect(chunk)
+        # [6] זיהוי חפיפת דוברים 
+        # speaker_type, overlap_score = self.overlap.detect(chunk)
+        if not has_speech:
+           speaker_type, overlap_score = OverlapDetector.NOISE, 0.95
+        else:
+           speaker_type, overlap_score = self.overlap.detect(chunk, harm_threshold)
 
         # [7] ניתוח הקשרי — HEBERT + מכונת מצבים
         context_result = {
