@@ -199,7 +199,9 @@ class OverlapDetector:
         # חישוב kurtosis — מדד "שפיצות" ההתפלגות:
         #   kurtosis נמוך (< KURTOSIS_SINGLE_VETO=3.5) = גל תקופתי אחיד = דובר יחיד
         #   kurtosis גבוה (≥ 3.5) = ערבוב כאוטי = ריבוי דוברים
-        kurtosis  = self._compute_kurtosis(sig)
+        kurtosis     = self._compute_kurtosis(sig)
+        # חישוב harmonicity — תקופתיות הגל: גבוה = דובר יחיד, נמוך = ריבוי / רעש
+        harmonicity  = self._compute_harmonicity(sig)
 
         
         overlap_score = min(1.0, (
