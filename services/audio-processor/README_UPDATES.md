@@ -1,4 +1,4 @@
-# Quality Learning - עדכונים גדולים! 🚀
+<!-- # Quality Learning - עדכונים גדולים! 🚀
 
 ## תאריך: 2024
 ## גרסה: 2.0 - HEBERT Integration
@@ -263,4 +263,4 @@ python run_analysis.py test_audio.wav
 
 **תאריך עדכון אחרון:** 2024
 **גרסה:** 2.0
-**מפתח:** Quality Learning Team
+**מפתח:** Quality Learning Team -->

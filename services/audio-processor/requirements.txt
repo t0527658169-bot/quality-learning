@@ -14,3 +14,8 @@ openai-whisper>=20231117
 # HEBERT - Hebrew BERT for context analysis
 torch>=2.0.0
 transformers>=4.30.0
+
+# FastAPI web server — עוטף את ה-pipeline ל-HTTP endpoint
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9

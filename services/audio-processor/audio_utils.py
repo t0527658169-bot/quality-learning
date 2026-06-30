@@ -5,10 +5,16 @@
 # ללא תלות בספריות חיצוניות כבדות (כמו librosa).
 # משתמש רק ב-numpy ו-scipy שהם יציבים ואמינים.
 
+# יייבוא numpy לחישובים על מערכי דגימות
 import numpy as np
+# rfft = Fast Fourier Transform לצד החיובי בלבד (מספיק לאותות אמיתיים)
+# rfftfreq = חישוב התדרים המתאימים לתוצאת rfft
 from scipy.fft import rfft, rfftfreq
+# get_window = יצירת חלוני חלקה (Hann, Hamming וכו') למניעת דליפה ספקטרלית
 from scipy.signal import get_window
-from config import SAMPLE_RATE
+# קצב הדגימה הגלובלי של המערכת
+# from config import SAMPLE_RATE
+from config import SAMPLE_RATE, MFCC_N_COEFFICIENTS, MFCC_N_FILTERS
 
 
 # ===============================================
@@ -20,8 +26,15 @@ def frame_audio(audio: np.ndarray, frame_len: int, hop_len: int) -> np.ndarray:
     כל שורה = פריים אחד של frame_len דגימות.
     המרחק בין פריימים = hop_len דגימות.
     """
+    # חישוב כמה פריימים יהיו בסך הכל
+    # 1 + ... = פריים ראשון תמיד קיים; // = חלוקה שלמה (ללא שארית)
     num_frames = 1 + (len(audio) - frame_len) // hop_len
+    # בניית מטריצת אינדקסים: כל שורה = אינדקסי פריים אחד
+    # np.arange(frame_len)[None, :] = וקטור 0..frame_len-1 כשורה יחידה
+    # hop_len * np.arange(num_frames)[:, None] = הזזה של כל פריים
+    # הסכום נותן מטריצה num_frames × frame_len של אינדקסים
     indices = np.arange(frame_len)[None, :] + hop_len * np.arange(num_frames)[:, None]
+    # שליפת הדגימות עצמן בעזרת מטריצת האינדקסים
     return audio[indices]
 
 
@@ -30,6 +43,8 @@ def frame_audio(audio: np.ndarray, frame_len: int, hop_len: int) -> np.ndarray:
 # ===============================================
 def compute_rms(frames: np.ndarray) -> np.ndarray:
     """RMS = √(ממוצע(x²)) — עוצמת הצליל בכל פריים."""
+    # frames**2 = ריבוע כל דגימה, np.mean(..., axis=1) = ממוצע לכל שורה (פריים)
+    # np.sqrt = שורש — נותן RMS לכל פריים
     return np.sqrt(np.mean(frames ** 2, axis=1))
 
 
@@ -41,9 +56,13 @@ def compute_zcr(frames: np.ndarray) -> np.ndarray:
     ZCR — כמה פעמים הגל חוצה את ציר ה-0 בכל פריים.
     ערך גבוה = רעש אקראי, ערך נמוך = צליל מובנה (דיבור).
     """
+    # np.sign(frames) = +1 לדגימות חיוביות, -1 לשליליות, 0 לאפס
     signs = np.sign(frames)
+    # np.diff(signs, axis=1) = הפרש בין דגימות סמוכות לאורך הפריים
+    # np.abs() > 0 = True בכל מקום שיש שינוי סימן (חציית אפס)
     # ספירת שינויי סימן (+ ↔ -)
     crossings = np.abs(np.diff(signs, axis=1))
+    # np.mean(..., axis=1) = אחוז החציות בכל פריים (0.0 עד 1.0)
     return np.mean(crossings > 0, axis=1)
 
 
@@ -55,11 +74,17 @@ def compute_spectrum(frames: np.ndarray, sample_rate: int = SAMPLE_RATE):
     חישוב ספקטרום הספק לכל פריים באמצעות FFT.
     מחזיר: (magnitude, frequencies)
     """
-    # הפעלת חלון Hann למניעת דליפה ספקטרלית
+    # הפעלת חלון Hann — פונקציה שמאפסת את קצות הפריים כדי למנוע
+    # דליפה ספקטרלית (artifacts מחיתוך חד של האות)
     window = get_window('hann', frames.shape[1])
+    # הכפלת כל פריים בחלון Hann
     windowed = frames * window
     # FFT — מעבר מתחום הזמן לתחום התדר
+    # rfft מחזיר רק תדרים חיוביים (מספיק לאותות אמיתיים)
+    # np.abs() לוקח גודל (מודולוס) של מספרים מרוכבים
     spectrum = np.abs(rfft(windowed, axis=1))
+    # rfftfreq מחשב את התדרים (בHz) המתאימים לכל בין FFT
+    # d=1/sample_rate = מרחק בין דגימות בשניות
     freqs = rfftfreq(frames.shape[1], d=1.0 / sample_rate)
     return spectrum, freqs
 
@@ -72,7 +97,11 @@ def compute_spectral_centroid(spectrum: np.ndarray, freqs: np.ndarray) -> np.nda
     מרכז הכובד של התדרים — "בהירות" הצליל.
     נוסחה: centroid = Σ(f × |X(f)|) / Σ(|X(f)|)
     """
+    # סכום האנרגיה בכל התדרים לכל פריים (+1e-10 מונע חלוקה באפס)
     total_energy = np.sum(spectrum, axis=1) + 1e-10
+    # ממוצע משוקלל של התדרים — תדרים חזקים יותר משפיעים יותר
+    # spectrum * freqs = כל בין מוכפל בתדר שלו
+    # np.sum(..., axis=1) = סכום על כל התדרים לכל פריים
     centroid = np.sum(spectrum * freqs, axis=1) / total_energy
     return centroid
 
@@ -87,9 +116,13 @@ def compute_spectral_flatness(spectrum: np.ndarray) -> np.ndarray:
     1.0 = רעש לבן (שטוח), 0.0 = צליל טהור (שיא בודד).
     """
     # ממוצע גיאומטרי — משתמשים ב-log כדי להימנע מ-overflow
+    # log(spectrum+1e-10) מונע log(0)
     log_spectrum = np.log(spectrum + 1e-10)
+    # ממוצע הלוגריתמים ואז exp = ממוצע גיאומטרי
     geo_mean = np.exp(np.mean(log_spectrum, axis=1))
+    # ממוצע אריתמטי רגיל (+1e-10 מונע חלוקה באפס)
     arith_mean = np.mean(spectrum, axis=1) + 1e-10
+    # יחס גיאומטרי/אריתמטי: 1.0=שטוח לחלוטין, קרוב ל-0=שיא בודד
     return geo_mean / arith_mean
 
 
@@ -102,8 +135,12 @@ def compute_spectral_bandwidth(spectrum: np.ndarray, freqs: np.ndarray,
     רוחב הפס — כמה "רחב" הצליל בתדרים.
     נוסחה: bw = √( Σ(|X(f)| × (f - centroid)²) / Σ(|X(f)|) )
     """
+    # סכום האנרגיה הכולל בכל פריים
     total = np.sum(spectrum, axis=1) + 1e-10
+    # ריבוע המרחק של כל תדר ממרכז הספקטרום
+    # centroid[:, None] מרחיב וקטור 1D לעמודה כדי לאפשר חיסור מטריצה
     deviation = (freqs - centroid[:, None]) ** 2
+    # שורש של ממוצע משוקלל — דומה לסטיית תקן של התדרים
     bw = np.sqrt(np.sum(spectrum * deviation, axis=1) / total)
     return bw
 
@@ -151,8 +188,10 @@ def _mel_filterbank(num_filters: int, fft_size: int, sample_rate: int) -> np.nda
     return filterbank
 
 
-def compute_mfcc(audio: np.ndarray, sample_rate: int = SAMPLE_RATE,
-                  n_mfcc: int = 13, n_filters: int = 26) -> np.ndarray:
+# def compute_mfcc(audio: np.ndarray, sample_rate: int = SAMPLE_RATE,
+#                   n_mfcc: int = 13, n_filters: int = 26) -> np.ndarray:
+def compute_mfcc(audio: np.ndarray, sample_rate: int = SAMPLE_RATE, 
+                 n_mfcc: int = MFCC_N_COEFFICIENTS, n_filters: int = MFCC_N_FILTERS) -> np.ndarray:
     """
     חישוב 13 מקדמי MFCC (Mel-Frequency Cepstral Coefficients).
     שלבים:

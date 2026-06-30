@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quality Learning — מערכת ניתוח שיעורים</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+  --blue:   #102147;
+  --blue-lt:rgba(37,99,235,.1);
+  --blue-md:rgba(37,99,235,.28);
+  --red:    #ef4444;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(0,0,0,.35),0 4px 16px rgba(0,0,0,.28);
+  --shadow-lg:0 8px 40px rgba(0,0,0,.55);
+  --bg:     #223b5d;
+  --surface:#141c2b;
+  --surface2:#1a2438;
+  --border: rgba(255,255,255,.08);
+  --text:   #e2e8f0;
+  --muted:  #64748b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Heebo',sans-serif;min-height:100vh;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+
+/* ── LOGIN ── */
+#loginPage{display:flex;min-height:100vh}
+.loginSide{flex:0 0 420px;background:#0a1020;display:flex;flex-direction:column;
+  justify-content:center;padding:60px 48px;position:relative;overflow:hidden;
+  border-left:1px solid var(--border)}
+.loginSide::before{content:'';position:absolute;top:-80px;right:-80px;width:320px;height:320px;
+  background:rgba(37,99,235,.14);border-radius:50%}
+.loginSide::after{content:'';position:absolute;bottom:-60px;left:-60px;width:240px;height:240px;
+  background:rgba(37,99,235,.09);border-radius:50%}
+.loginBrand{position:relative;z-index:1}
+.loginBrandMark{display:flex;align-items:center;gap:12px;margin-bottom:32px}
+.brandIcon{width:42px;height:42px;background:var(--blue);border-radius:10px;
+  display:flex;align-items:center;justify-content:center}
+.brandIcon svg{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round}
+.loginBrandName{font-size:1.25rem;font-weight:700;color:#fff;letter-spacing:-.3px}
+.loginTagline{font-size:1.6rem;font-weight:800;color:#fff;line-height:1.35;margin-bottom:12px}
+.loginDesc{font-size:.9rem;color:#64748b;line-height:1.6}
+.loginForm{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px;background:var(--bg)}
+.loginCard{width:100%;max-width:400px}
+.loginCardTitle{font-size:1.4rem;font-weight:700;color:#f1f5f9;margin-bottom:6px}
+.loginCardSub{font-size:.88rem;color:var(--muted);margin-bottom:32px}
+.fieldWrap{margin-bottom:16px}
+.fieldWrap label{display:block;font-size:.82rem;font-weight:600;color:#94a3b8;margin-bottom:6px;letter-spacing:.2px}
+.fieldWrap input{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--radius);
+  font-size:.93rem;font-family:inherit;color:var(--text);background:var(--surface2);
+  transition:border-color .2s,box-shadow .2s}
+.fieldWrap input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.loginBtn{width:100%;padding:12px;background:var(--blue);color:#fff;border:none;
+  border-radius:var(--radius);font-size:.95rem;font-weight:700;font-family:inherit;
+  cursor:pointer;margin-top:8px;transition:background .2s,transform .1s}
+.loginBtn:hover{background:#1d4ed8}
+.loginBtn:active{transform:scale(.99)}
+.loginBtn:disabled{opacity:.6;cursor:not-allowed}
+.loginError{color:#f87171;font-size:.85rem;margin-top:12px;min-height:18px}
+@media(max-width:700px){#loginPage{flex-direction:column}.loginSide{flex:none;padding:36px 24px}.loginSide::before,.loginSide::after{display:none}}
+
+/* ── APP SHELL ── */
+#appPage{display:none;min-height:100vh;flex-direction:column}
+#appPage.visible{display:flex}
+.appHeader{background:#0a1020;color:#fff;padding:0 32px;height:60px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border)}
+.headerBrand{display:flex;align-items:center;gap:10px}
+.headerBrandIcon{width:32px;height:32px;background:var(--blue);border-radius:7px;
+  display:flex;align-items:center;justify-content:center}
+.headerBrandIcon svg{width:17px;height:17px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round}
+.headerTitle{font-size:1.05rem;font-weight:700;letter-spacing:-.2px}
+.headerRight{display:flex;align-items:center;gap:20px}
+.rolePill{background:rgba(37,99,235,.2);border:1px solid rgba(37,99,235,.35);
+  color:#93c5fd;padding:3px 11px;border-radius:20px;font-size:.75rem;font-weight:600;letter-spacing:.3px}
+.headerGreet{font-size:.85rem;color:#64748b}
+.logoutBtn{background:transparent;border:1px solid rgba(255,255,255,.15);color:#94a3b8;
+  padding:6px 16px;border-radius:7px;cursor:pointer;font-size:.83rem;font-family:inherit;
+  transition:border-color .2s,color .2s}
+.logoutBtn:hover{border-color:rgba(255,255,255,.4);color:#f1f5f9}
+
+/* ── MAIN LAYOUT ── */
+.appMain{max-width:960px;margin:32px auto;padding:0 20px;width:100%}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:2px;margin-bottom:28px;background:var(--surface2);border-radius:10px;padding:3px;width:fit-content}
+.tab{padding:8px 22px;border-radius:8px;border:none;font-size:.88rem;font-weight:600;font-family:inherit;
+  cursor:pointer;background:transparent;color:var(--muted);transition:.15s;white-space:nowrap}
+.tab.active{background:var(--surface);color:#f1f5f9;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+
+/* ── CARD ── */
+.card{background:var(--surface);border-radius:12px;padding:28px;box-shadow:var(--shadow);margin-bottom:20px;border:1px solid var(--border)}
+.cardHead{display:flex;align-items:center;gap:10px;margin-bottom:24px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.cardHead svg{width:18px;height:18px;fill:none;stroke:#60a5fa;stroke-width:2;stroke-linecap:round;flex-shrink:0}
+.cardHead h2{font-size:1rem;font-weight:700;color:#f1f5f9}
+
+/* ── FORM ── */
+.formGrid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.formGroup{display:flex;flex-direction:column;gap:6px}
+.formGroup.full{grid-column:1/-1}
+label{font-size:.8rem;font-weight:600;color:#94a3b8;letter-spacing:.2px}
+label .req{color:#f87171;margin-right:2px}
+input,select,textarea{width:100%;padding:10px 13px;border:1.5px solid var(--border);
+  border-radius:var(--radius);font-size:.88rem;font-family:inherit;color:var(--text);background:var(--surface2);transition:.2s}
+input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+select{cursor:pointer}
+input::placeholder{color:#334155}
+select option{background:var(--surface2);color:var(--text)}
+
+/* ── DROP ZONE ── */
+.dropZone{border:1.5px dashed var(--blue-md);border-radius:var(--radius);padding:32px 20px;
+  text-align:center;cursor:pointer;transition:.2s;background:var(--surface2)}
+.dropZone:hover,.dropZone.over{border-color:var(--blue);background:rgba(37,99,235,.08)}
+.dropZone input{display:none}
+.dropZone .dzIcon{width:40px;height:40px;margin:0 auto 12px;background:rgba(37,99,235,.2);border-radius:50%;
+  display:flex;align-items:center;justify-content:center}
+.dropZone .dzIcon svg{width:20px;height:20px;fill:none;stroke:#60a5fa;stroke-width:2;stroke-linecap:round}
+.dropZone p{color:var(--muted);font-size:.85rem;line-height:1.55}
+.fileName{margin-top:10px;font-weight:600;color:#60a5fa;font-size:.85rem}
+
+/* ── BUTTONS ── */
+.submitBtn{width:100%;padding:12px;background:var(--blue);color:#fff;border:none;
+  border-radius:var(--radius);font-size:.93rem;font-weight:700;font-family:inherit;
+  cursor:pointer;margin-top:16px;transition:.15s;display:flex;align-items:center;justify-content:center;gap:8px}
+.submitBtn:hover{background:#1d4ed8}
+.submitBtn:disabled{opacity:.5;cursor:not-allowed}
+.submitBtn svg{width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round}
+
+/* ── RESULT / STATUS ── */
+.resultBox{display:none;border-radius:var(--radius);padding:16px 18px;margin-top:14px;border-width:1px;border-style:solid}
+.resultBox.success{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.25);color:#86efac}
+.resultBox.error{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.25);color:#fca5a5}
+.resultBox h3{font-size:.93rem;font-weight:700;margin-bottom:4px}
+.resultBox .det{font-size:.83rem;margin-top:2px;opacity:.85}
+.statusBox{display:none;margin-top:14px;padding:14px 16px;background:var(--blue-lt);
+  border-radius:var(--radius);border:1px solid var(--blue-md);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.statusBox strong{font-size:.85rem;color:#cbd5e1}
+.badge{display:inline-flex;align-items:center;padding:3px 12px;border-radius:20px;font-size:.77rem;font-weight:700;letter-spacing:.2px}
+.badge-Pending{background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.3)}
+.badge-Processing{background:rgba(37,99,235,.2);color:#93c5fd;border:1px solid rgba(37,99,235,.4)}
+.badge-Done{background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.3)}
+.badge-Failed{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.3)}
+#statusDetail{font-size:.83rem;color:#94a3b8;flex:1}
+.queueInfo{text-align:center;font-size:.8rem;color:#475569;margin-top:10px}
+
+/* ── SEARCH / ANALYTICS ── */
+.filterBar{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px}
+.filterField{display:flex;flex-direction:column;gap:5px}
+.filterField label{font-size:.78rem;font-weight:600;color:#94a3b8;letter-spacing:.2px}
+.filterField input,.filterField select{padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:.85rem;font-family:inherit;background:var(--surface2);color:var(--text)}
+.filterField input:focus,.filterField select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.searchBtn{padding:9px 20px;background:var(--blue);color:#fff;border:none;border-radius:8px;
+  font-size:.88rem;font-weight:700;font-family:inherit;cursor:pointer;transition:.15s;align-self:flex-end;height:38px}
+.searchBtn:hover{background:#1d4ed8}
+
+/* ── TABLE ── */
+.tbl{width:100%;border-collapse:collapse;font-size:.83rem}
+.tbl thead{background:var(--surface2)}
+.tbl th{padding:10px 12px;text-align:right;border-bottom:1px solid var(--border);
+  color:var(--muted);font-size:.75rem;font-weight:700;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap}
+.tbl td{padding:10px 12px;border-bottom:1px solid var(--border);color:#cbd5e1}
+.tbl tbody tr:hover td{background:rgba(37,99,235,.07);cursor:pointer}
+.gb{padding:3px 10px;border-radius:6px;font-weight:700;font-size:.76rem;display:inline-block;letter-spacing:.2px}
+.g-מצוין{background:rgba(34,197,94,.15);color:#86efac;border:1px solid rgba(34,197,94,.25)}
+.g-טוב{background:rgba(37,99,235,.18);color:#93c5fd;border:1px solid rgba(37,99,235,.3)}
+.g-בינוני{background:rgba(245,158,11,.15);color:#fcd34d;border:1px solid rgba(245,158,11,.25)}
+.g-נמוך{background:rgba(239,68,68,.15);color:#fca5a5;border:1px solid rgba(239,68,68,.25)}
+.tblAnalyze{color:#60a5fa;font-weight:600;font-size:.8rem;text-decoration:none;white-space:nowrap}
+.tblAnalyze:hover{text-decoration:underline}
+
+/* ── MODAL ── */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;
+  align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)}
+.modal.open{display:flex}
+.modalCard{background:var(--surface);border-radius:16px;padding:32px;width:100%;max-width:800px;
+  max-height:90vh;overflow-y:auto;position:relative;box-shadow:var(--shadow-lg);border:1px solid var(--border)}
+.modalClose{position:absolute;top:16px;left:16px;background:var(--surface2);border:none;
+  width:32px;height:32px;border-radius:8px;cursor:pointer;color:#94a3b8;
+  font-size:1rem;display:flex;align-items:center;justify-content:center;transition:.15s;line-height:1}
+.modalClose:hover{background:rgba(255,255,255,.1);color:#f1f5f9}
+.modalTitle{font-size:1.1rem;font-weight:700;color:#f1f5f9;margin-bottom:4px}
+.modalMeta{font-size:.83rem;color:var(--muted);margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border)}
+.statsGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:24px}
+.statBox{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.statVal{font-size:1.6rem;font-weight:800;color:#f1f5f9}
+.statLbl{font-size:.75rem;color:var(--muted);margin-top:5px;font-weight:500}
+
+/* ── MISC ── */
+.emptyMsg{padding:24px 0;text-align:center;color:#475569;font-size:.88rem}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<div id="loginPage">
+  <div class="loginSide">
+    <div class="loginBrand">
+      <div class="loginBrandMark">
+        <div class="brandIcon">
+          <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <span class="loginBrandName">Quality Learning</span>
+      </div>
+      <div class="loginTagline">מערכת ניתוח<br>איכות שיעורים</div>
+      <p class="loginDesc"></p>
+    </div>
+  </div>
+  <div class="loginForm">
+    <div class="loginCard">
+      <div class="loginCardTitle">כניסה למערכת</div>
+      <div class="loginCardSub">הזן את פרטי הכניסה שלך</div>
+      <form id="loginForm">
+        <div class="fieldWrap">
+          <label for="lusername">שם משתמש</label>
+          <input type="text" id="lusername" placeholder="מספר זהות" autocomplete="username" required>
+        </div>
+        <div class="fieldWrap">
+          <label for="lpassword">סיסמה</label>
+          <input type="password" id="lpassword" placeholder="••••••••" autocomplete="current-password" required>
+        </div>
+        <button class="loginBtn" type="submit" id="loginBtn">כניסה</button>
+      </form>
+      <div class="loginError" id="loginError"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== APP ===== -->
+<div id="appPage">
+  <div class="appHeader">
+    <div class="headerBrand">
+      <div class="headerBrandIcon">
+        <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <span class="headerTitle">Quality Learning</span>
+    </div>
+    <div class="headerRight">
+      <span class="rolePill" id="roleBadge"></span>
+      <span class="headerGreet" id="headerGreet"></span>
+      <button class="logoutBtn" onclick="logout()">יציאה</button>
+    </div>
+  </div>
+
+  <div class="appMain">
+
+    <!-- TABS -->
+    <div class="tabs" id="tabsBar" style="display:none">
+      <button class="tab active" id="tabBtnUpload"    onclick="showTab('upload')">העלאת הקלטה</button>
+      <button class="tab"        id="tabBtnAnalytics" onclick="showTab('analytics')">ניתוח נתונים</button>
+    </div>
+
+    <!-- ===== TAB: העלאה ===== -->
+    <div id="tabUpload">
+      <div class="card">
+        <div class="cardHead">
+          <svg viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+          <h2>העלאת הקלטת שיעור</h2>
+        </div>
+        <form id="uploadForm">
+          <div class="formGrid">
+            <div class="formGroup full">
+              <label for="scheduledLessonId">שיעור<span class="req">*</span></label>
+              <select id="scheduledLessonId" name="scheduledLessonId" required>
+                <option value="">טוען שיעורים...</option>
+              </select>
+            </div>
+            <div class="formGroup">
+              <label for="lessonDate">תאריך השיעור<span class="req">*</span></label>
+              <input type="date" id="lessonDate" name="lessonDate" required>
+            </div>
+            <div class="formGroup">
+              <label for="teacherNotes">הערות (אופציונלי)</label>
+              <input type="text" id="teacherNotes" name="teacherNotes" placeholder="הערה חופשית">
+            </div>
+            <div class="formGroup full">
+              <label>קובץ הקלטה<span class="req">*</span></label>
+              <div class="dropZone" id="dropZone" onclick="document.getElementById('audioFile').click()">
+                <input type="file" id="audioFile" name="file" accept=".wav,.mp3,.ogg,.flac,.m4a,.webm" required>
+                <div class="dzIcon">
+                  <svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                </div>
+                <p>לחץ או גרור קובץ שמע לכאן<br>
+                   <span style="font-size:.78rem;color:#94a3b8"></span></p>
+                <div class="fileName" id="fileNameDisplay"></div>
+              </div>
+            </div>
+          </div>
+          <button type="submit" class="submitBtn" id="submitBtn">
+            <svg viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            העלה לניתוח
+          </button>
+        </form>
+
+        <div class="resultBox" id="resultBox">
+          <h3 id="resultTitle"></h3>
+          <div class="det" id="resultDetail"></div>
+        </div>
+
+        <div class="statusBox" id="statusBox" style="display:none">
+          <strong>מצב עיבוד:</strong>
+          <span class="badge" id="statusBadge"></span>
+          <div id="statusDetail"></div>
+        </div>
+        <div class="queueInfo" id="queueInfo"></div>
+      </div>
+    </div>
+
+    <!-- ===== TAB: ניתוח (מנהלת בלבד) ===== -->
+    <div id="tabAnalytics" style="display:none">
+
+      <!-- ── כפתורי ניהול ── -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="cardHead">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          <h2>ניהול מערכת</h2>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;padding-top:4px">
+          <button class="submitBtn" style="width:auto;padding:10px 22px;display:inline-flex;align-items:center;gap:8px" onclick="openAddTeacherModal()">
+            <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7"/><line x1="16" y1="16" x2="22" y2="16"/><line x1="19" y1="13" x2="19" y2="19"/></svg>
+            הוסף מורה חדשה
+          </button>
+          <button class="submitBtn" style="width:auto;padding:10px 22px;display:inline-flex;align-items:center;gap:8px;background:#1d4ed8" onclick="openAddLessonModal()">
+            <svg viewBox="0 0 24 24" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+            הוסף שיעור למורה
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="cardHead">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <h2>ניתוח נתוני הקלטות</h2>
+        </div>
+        <div class="filterBar">
+          <div class="filterField">
+            <label>מורה</label>
+            <select id="sTeacher" onchange="filterLessonsByTeacher()">
+              <option value="">כל המורות</option>
+            </select>
+          </div>
+          <div class="filterField">
+            <label>כיתה</label>
+            <input type="text" id="sClass" placeholder="כגון ז1">
+          </div>
+          <div class="filterField">
+            <label>מקצוע</label>
+            <input type="text" id="sSubject" placeholder="כגון מתמטיקה">
+          </div>
+          <div class="filterField">
+            <label>שיעור</label>
+            <select id="sLesson"><option value="">כל השיעורים</option></select>
+          </div>
+          <div class="filterField">
+            <label>תאריך</label>
+            <input type="date" id="sDate">
+          </div>
+          <div class="filterField" style="justify-content:flex-end">
+            <button class="searchBtn" onclick="searchRecordings()">חיפוש</button>
+          </div>
+        </div>
+        <div id="searchResults"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== MODAL: הוסף מורה ===== -->
+<div class="modal" id="addTeacherModal">
+  <div class="modalCard" style="max-width:460px">
+    <button class="modalClose" onclick="closeAddTeacherModal()">✕</button>
+    <div class="modalTitle">הוספת מורה חדשה</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">
+      <div class="fieldWrap"><label>שם מלא *</label><input type="text" id="nt_name" placeholder="לדוגמה: שרה לוי"></div>
+      <div class="fieldWrap"><label>אימייל *</label><input type="email" id="nt_email" placeholder="sara@school.ac.il"></div>
+      <div class="fieldWrap"><label>שם משתמש *</label><input type="text" id="nt_user" placeholder="ת&quot;ז או שם משתמש ייחודי"></div>
+      <div class="fieldWrap"><label>סיסמה ראשונית *</label><input type="password" id="nt_pass" placeholder="לפחות 4 תווים"></div>
+      <div class="fieldWrap"><label>טלפון</label><input type="tel" id="nt_phone" placeholder="050-0000000 (אופציונלי)"></div>
+      <div id="addTeacherError" style="color:#f87171;font-size:.85rem;min-height:18px"></div>
+      <button class="submitBtn" onclick="submitAddTeacher()">הוסף מורה</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: הוסף שיעור ===== -->
+<div class="modal" id="addLessonModal">
+  <div class="modalCard" style="max-width:500px">
+    <button class="modalClose" onclick="closeAddLessonModal()">✕</button>
+    <div class="modalTitle">הוספת שיעור ללוח הזמנים</div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:16px">
+      <div class="fieldWrap"><label>מורה *</label>
+        <select id="nl_teacher"><option value="">בחר מורה...</option></select>
+      </div>
+      <div class="fieldWrap"><label>כיתה *</label>
+        <select id="nl_class"><option value="">בחר כיתה...</option></select>
+      </div>
+      <div class="fieldWrap"><label>מקצוע *</label>
+        <select id="nl_subject"><option value="">בחר מקצוע...</option></select>
+      </div>
+      <div style="display:flex;gap:12px">
+        <div class="fieldWrap" style="flex:1"><label>יום בשבוע *</label>
+          <select id="nl_day">
+            <option value="1">ראשון</option>
+            <option value="2">שני</option>
+            <option value="3">שלישי</option>
+            <option value="4">רביעי</option>
+            <option value="5">חמישי</option>
+            <option value="6">שישי</option>
+          </select>
+        </div>
+        <div class="fieldWrap" style="flex:1"><label>שעת שיעור (1–12) *</label>
+          <input type="number" id="nl_hour" min="1" max="12" value="1">
+        </div>
+      </div>
+      <div style="display:flex;gap:12px">
+        <div class="fieldWrap" style="flex:1"><label>שעת התחלה *</label><input type="time" id="nl_start" value="08:00"></div>
+        <div class="fieldWrap" style="flex:1"><label>שעת סיום *</label><input type="time" id="nl_end" value="08:45"></div>
+      </div>
+      <div class="fieldWrap"><label>חדר (אופציונלי)</label><input type="text" id="nl_room" placeholder="לדוגמה: 204"></div>
+      <div id="addLessonError" style="color:#f87171;font-size:.85rem;min-height:18px"></div>
+      <button class="submitBtn" onclick="submitAddLesson()">הוסף שיעור</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL ===== -->
+<div class="modal" id="chartModal">
+  <div class="modalCard">
+    <button class="modalClose" onclick="closeModal()">✕</button>
+    <div class="modalTitle" id="modalTitle">ניתוח הקלטה</div>
+    <div class="modalMeta" id="modalMeta"></div>
+    <div class="statsGrid" id="modalStats"></div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+      <div style="flex:0 0 170px"><canvas id="myChart" height="170"></canvas></div>
+      <div style="flex:1;min-width:220px"><canvas id="timelineChart" height="170"></canvas></div>
+    </div>
+    <div id="modalWindowsError" style="display:none;color:var(--red);font-size:.82rem;margin-top:10px"></div>
+  </div>
+</div>
+
+<script>
+const API = 'https://localhost:5002';
+let currentUser = null;
+let chartInstance = null;
+let timelineInstance = null;
+let allLessons = [];
+
+// ===== LOGIN =====
+document.getElementById('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'מתחבר...';
+  document.getElementById('loginError').textContent = '';
+
+  const form = new FormData();
+  form.append('username', document.getElementById('lusername').value.trim());
+  form.append('password', document.getElementById('lpassword').value);
+  try {
+    const res = await fetch(`${API}/api/auth/login`, { method:'POST', body:form });
+    const data = await res.json();
+    if (!res.ok) { document.getElementById('loginError').textContent = data.error || 'שגיאה'; return; }
+    currentUser = data;
+    enterApp();
+  } catch(err) {
+    document.getElementById('loginError').textContent = 'שגיאת חיבור לשרת';
+  } finally {
+    btn.disabled = false; btn.textContent = 'כניסה למערכת';
+  }
+});
+
+function isPrincipal() {
+  return currentUser && (currentUser.role === 'principal' || currentUser.role === 'admin');
+}
+
+function enterApp() {
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('appPage').classList.add('visible');
+
+  const p = isPrincipal();
+  document.getElementById('headerGreet').textContent = `שלום, ${currentUser.fullName}`;
+  document.getElementById('roleBadge').textContent = p ? 'מנהלת' : 'מורה';
+
+  if (p) {
+    document.getElementById('tabsBar').style.display = 'flex';
+    loadAnalyticsTeachers();
+  }
+
+  loadLessons();
+  document.getElementById('lessonDate').valueAsDate = new Date();
+  document.getElementById('lessonDate').max = new Date().toISOString().split('T')[0];
+  updateQueueInfo();
+}
+
+function logout() {
+  currentUser = null;
+  document.getElementById('appPage').classList.remove('visible');
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('lusername').value = '';
+  document.getElementById('lpassword').value = '';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('tabsBar').style.display = 'none';
+  document.getElementById('tabUpload').style.display = '';
+  document.getElementById('tabAnalytics').style.display = 'none';
+  document.getElementById('searchResults').innerHTML = '';
+  stopSearchPolling();
+}
+
+// ===== TABS =====
+function showTab(tab) {
+  document.getElementById('tabBtnUpload').classList.toggle('active', tab === 'upload');
+  document.getElementById('tabBtnAnalytics').classList.toggle('active', tab === 'analytics');
+  document.getElementById('tabUpload').style.display    = tab === 'upload'    ? '' : 'none';
+  document.getElementById('tabAnalytics').style.display = tab === 'analytics' ? '' : 'none';
+  if (tab === 'analytics') loadAllLessonsForSearch();
+}
+
+// ===== LOAD LESSONS לטופס העלאה =====
+async function loadLessons() {
+  try {
+    // מורה רגילה — רק השיעורים שלה; מנהלת — הכל
+    const tid = isPrincipal() ? '' : `?teacherId=${currentUser.id}`;
+    const res = await fetch(`${API}/api/recordings/lessons${tid}`);
+    const lessons = await res.json();
+    const sel = document.getElementById('scheduledLessonId');
+    sel.innerHTML = '<option value="">— בחרי שיעור —</option>';
+    lessons.forEach(l => sel.add(new Option(l.label, l.id)));
+  } catch {
+    document.getElementById('scheduledLessonId').innerHTML = '<option value="">שגיאה בטעינה</option>';
+  }
+}
+
+// ===== LOAD מורות לסינון =====
+async function loadAnalyticsTeachers() {
+  try {
+    const res = await fetch(`${API}/api/recordings/lessons`);
+    allLessons = await res.json();
+    const teachers = [...new Map(allLessons.map(l => [l.teacherName, l])).values()];
+    const sel = document.getElementById('sTeacher');
+    sel.innerHTML = '<option value="">כל המורות</option>';
+    teachers.forEach(l => sel.add(new Option(l.teacherName, l.teacherName)));
+  } catch {}
+}
+
+// ===== סינון שיעורים לפי מורה =====
+function filterLessonsByTeacher() {
+  const teacher = document.getElementById('sTeacher').value;
+  const filtered = teacher ? allLessons.filter(l => l.teacherName === teacher) : allLessons;
+  const sel = document.getElementById('sLesson');
+  sel.innerHTML = '<option value="">כל השיעורים</option>';
+  filtered.forEach(l => sel.add(new Option(`${l.className} | ${l.subjectName}`, l.id)));
+}
+
+// ===== LOAD שיעורים לסינון =====
+async function loadAllLessonsForSearch() {
+  try {
+    const res = await fetch(`${API}/api/recordings/lessons`);
+    allLessons = await res.json();
+    filterLessonsByTeacher(); // מאכלס sLesson בהתאם
+  } catch {}
+}
+
+// ===== DROP ZONE =====
+const dropZone = document.getElementById('dropZone');
+const audioFile = document.getElementById('audioFile');
+audioFile.addEventListener('change', () => {
+  if (audioFile.files[0]) document.getElementById('fileNameDisplay').textContent = audioFile.files[0].name;
+});
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+  if (e.dataTransfer.files[0]) {
+    audioFile.files = e.dataTransfer.files;
+    document.getElementById('fileNameDisplay').textContent = e.dataTransfer.files[0].name;
+  }
+});
+
+// ===== UPLOAD =====
+document.getElementById('uploadForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+
+  // בדיקה: יום בשבוע של התאריך תואם לשיעור הנבחר
+  const selectedLessonId = parseInt(document.getElementById('scheduledLessonId').value);
+  const selectedDateStr  = document.getElementById('lessonDate').value;
+  if (selectedLessonId && selectedDateStr) {
+    const lesson = allLessons.find(l => l.id === selectedLessonId);
+    if (lesson) {
+      const selectedDay = new Date(selectedDateStr).getDay(); // 0=ראשון ... 6=שבת
+      const lessonDay   = lesson.dayOfWeek - 1;               // DB: 1=ראשון → JS: 0=ראשון
+      if (selectedDay !== lessonDay) {
+        const dayNames = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+        showResult('error', 'תאריך לא תואם לשיעור',
+          `השיעור הנבחר מתקיים ביום ${dayNames[lessonDay]}. התאריך שבחרת הוא יום ${dayNames[selectedDay]}.`);
+        return;
+      }
+    }
+  }
+
+  btn.disabled = true; btn.textContent = 'מעלה...';
+  document.getElementById('resultBox').style.display = 'none';
+  document.getElementById('statusBox').style.display = 'none';
+
+  const form = new FormData();
+  form.append('scheduledLessonId', document.getElementById('scheduledLessonId').value);
+  form.append('lessonDate',        document.getElementById('lessonDate').value);
+  form.append('teacherNotes',      document.getElementById('teacherNotes').value);
+  form.append('file', audioFile.files[0]);
+
+  try {
+    const res  = await fetch(`${API}/api/recordings/upload`, { method:'POST', body:form });
+    const data = await res.json();
+    if (res.ok) {
+      showResult('success', 'ההקלטה הועלתה בהצלחה',
+        `ההקלטה נמצאת בתור לניתוח. מזהה: ${data.recordingId} | מיקום בתור: ${data.queuePosition}`);
+      startPolling(data.recordingId);
+      document.getElementById('uploadForm').reset();
+      document.getElementById('fileNameDisplay').textContent = '';
+    } else {
+      showResult('error', 'שגיאה בהעלאה', data.error || 'שגיאה לא ידועה');
+    }
+  } catch(err) {
+    showResult('error', 'לא ניתן להתחבר לשרת', err.message);
+  }
+  btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg> העלה לניתוח';
+  updateQueueInfo();
+});
+
+function showResult(type, title, detail) {
+  const box = document.getElementById('resultBox');
+  box.className = 'resultBox ' + type;
+  document.getElementById('resultTitle').textContent = title;
+  document.getElementById('resultDetail').textContent = detail;
+  box.style.display = 'block';
+}
+
+// ===== POLLING =====
+let pollingInterval = null;
+
+function startPolling(id) {
+  document.getElementById('statusBox').style.display = 'block';
+  clearInterval(pollingInterval);
+  pollingInterval = setInterval(async () => {
+    try {
+      const res  = await fetch(`${API}/api/recordings/${id}/status`);
+      const data = await res.json();
+      const badge = document.getElementById('statusBadge');
+      badge.className = `badge badge-${data.status}`;
+      badge.textContent = data.statusHebrew;
+      const det = document.getElementById('statusDetail');
+
+      if (data.status === 'Done') {
+        // מורה רגילה — לא רואה ציון
+        if (isPrincipal()) {
+          det.textContent = `ציון: ${(data.positivePct||0).toFixed(1)}% | דירוג: ${data.grade} | משך: ${Math.round(data.durationSec||0)}s`;
+        } else {
+          det.textContent = '';
+        }
+        clearInterval(pollingInterval);
+      } else if (data.status === 'Failed') {
+        det.textContent = `שגיאה: ${data.errorMessage}`;
+        clearInterval(pollingInterval);
+      } else if (data.status === 'Processing') {
+        det.textContent = 'הניתוח בעיצומו... ייקח כמה דקות';
+      } else {
+        det.textContent = 'ממתין לתורה בתור...';
+      }
+    } catch {}
+  }, 5000);
+}
+
+async function updateQueueInfo() {
+  try {
+    const res  = await fetch(`${API}/api/recordings/queue-status`);
+    const data = await res.json();
+    document.getElementById('queueInfo').textContent = data.message;
+  } catch {}
+}
+
+// ===== SEARCH (מנהלת) =====
+async function searchRecordings() {
+  const params = new URLSearchParams();
+  const lesson  = document.getElementById('sLesson').value;
+  const date    = document.getElementById('sDate').value;
+  const teacher = document.getElementById('sTeacher').value;
+  const cls     = document.getElementById('sClass').value.trim();
+  const subj    = document.getElementById('sSubject').value.trim();
+
+  if (lesson)  params.set('lessonId',    lesson);
+  if (date)    params.set('date',        date);
+  if (cls)     params.set('className',   cls);
+  if (subj)    params.set('subjectName', subj);
+
+  // סינון לפי מורה — משתמשים ב-teacherId (לא lesson id!)
+  if (teacher) {
+    const found = allLessons.find(l => l.teacherName === teacher);
+    if (found) params.set('teacherId', found.teacherId);
+  }
+
+  const container = document.getElementById('searchResults');
+  container.innerHTML = '<p style="color:#94a3b8;padding:12px 0">טוען...</p>';
+
+  try {
+    const res  = await fetch(`${API}/api/recordings/search?${params}`);
+    const rows = await res.json();
+
+    if (!rows.length) {
+      container.innerHTML = '<p style="color:#94a3b8;padding:12px 0">לא נמצאו הקלטות</p>';
+      stopSearchPolling();
+      return;
+    }
+
+    renderSearchResults(rows);
+  } catch(err) {
+    container.innerHTML = `<p style="color:#ef4444">שגיאה: ${err.message}</p>`;
+  }
+}
+
+// ===== AUTO-REFRESH SEARCH RESULTS =====
+let searchRefreshInterval = null;
+
+function startSearchPolling() {
+  stopSearchPolling();
+  searchRefreshInterval = setInterval(async () => {
+    // בדוק אם יש שורות שעדיין לא Done/Failed
+    const rows = document.querySelectorAll('#searchResults tbody tr[data-status]');
+    const hasActive = Array.from(rows).some(r => r.dataset.status === 'Pending' || r.dataset.status === 'Processing');
+    if (!hasActive) { stopSearchPolling(); return; }
+    // רענן בשקט (בלי "טוען...")
+    await searchRecordingsSilent();
+  }, 7000);
+}
+
+function stopSearchPolling() {
+  if (searchRefreshInterval) { clearInterval(searchRefreshInterval); searchRefreshInterval = null; }
+}
+
+async function searchRecordingsSilent() {
+  const params = new URLSearchParams();
+  const lesson  = document.getElementById('sLesson').value;
+  const date    = document.getElementById('sDate').value;
+  const teacher = document.getElementById('sTeacher').value;
+  const cls     = document.getElementById('sClass').value.trim();
+  const subj    = document.getElementById('sSubject').value.trim();
+
+  if (lesson)  params.set('lessonId',    lesson);
+  if (date)    params.set('date',        date);
+  if (cls)     params.set('className',   cls);
+  if (subj)    params.set('subjectName', subj);
+  if (teacher) {
+    const found = allLessons.find(l => l.teacherName === teacher);
+    if (found) params.set('teacherId', found.teacherId);
+  }
+
+  try {
+    const res  = await fetch(`${API}/api/recordings/search?${params}`);
+    const rows = await res.json();
+    if (!rows.length) return;
+    renderSearchResults(rows);
+  } catch {}
+}
+
+function renderSearchResults(rows) {
+  const container = document.getElementById('searchResults');
+  const sh = s => ({Pending:'ממתין',Processing:'בעיבוד',Done:'הושלם',Failed:'נכשל'})[s] || s;
+  const gc = g => g ? `<span class="gb g-${g}">${g}</span>` : '—';
+  const esc = v => (v||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+
+  container.innerHTML = `
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th>מורה</th><th>כיתה</th><th>מקצוע</th>
+          <th>תאריך</th><th>קובץ</th><th>מצב</th><th>ציון%</th><th>דירוג</th><th>גרף</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr data-status="${r.status}" onclick="showChart(${r.id},'${esc(r.teacherName)}','${esc(r.className)}','${esc(r.subjectName)}','${esc(r.lessonDate)}')">
+            <td>${r.teacherName}</td>
+            <td>${r.className}</td>
+            <td>${r.subjectName}</td>
+            <td>${r.lessonDate}</td>
+            <td style="font-size:.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis">${r.originalFileName||'—'}</td>
+            <td>${sh(r.status)}</td>
+            <td>${r.positivePct != null ? r.positivePct.toFixed(1)+'%' : '—'}</td>
+            <td>${gc(r.grade)}</td>
+            <td><span class="tblAnalyze">פתח ניתוח</span></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+
+  // אם עדיין יש ממתין/בעיבוד — המשך polling
+  const hasActive = rows.some(r => r.status === 'Pending' || r.status === 'Processing');
+  if (hasActive) startSearchPolling(); else stopSearchPolling();
+}
+
+// ===== CHART MODAL =====
+async function showChart(id, teacher, cls, subj, date) {
+  const res  = await fetch(`${API}/api/recordings/${id}/status`);
+  const d    = await res.json();
+
+  if (d.status !== 'Done') { alert('ההקלטה עדיין לא עובדה'); return; }
+
+  const pos = d.positivePct || 0;
+  const neg = 100 - pos;
+
+  document.getElementById('modalTitle').textContent = `ניתוח הקלטה #${id}`;
+  document.getElementById('modalMeta').textContent  = `${teacher} | ${cls} | ${subj} | ${date}`;
+  document.getElementById('modalWindowsError').style.display = 'none';
+
+  document.getElementById('modalStats').innerHTML = `
+    <div class="statBox"><div class="statVal" style="color:#16a34a">${pos.toFixed(1)}%</div><div class="statLbl">קשב חיובי</div></div>
+    <div class="statBox"><div class="statVal" style="color:#dc2626">${neg.toFixed(1)}%</div><div class="statLbl">הפרעות</div></div>
+    <div class="statBox"><div class="statVal" style="color:#1e3a8a">${d.grade||'—'}</div><div class="statLbl">דירוג</div></div>`;
+
+  // גרף עוגה — סיכום כללי
+  if (chartInstance) chartInstance.destroy();
+  chartInstance = new Chart(document.getElementById('myChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['קשב חיובי','הפרעות'],
+      datasets: [{ data:[pos,neg], backgroundColor:['#22c55e','#ef4444'], borderWidth:0 }]
+    },
+    options: {
+      plugins: { legend:{ position:'bottom', labels:{ font:{size:12} } } },
+      cutout: '65%'
+    }
+  });
+
+  // גרף ציר זמן — חלון חלון
+  if (timelineInstance) timelineInstance.destroy();
+  try {
+    const wRes = await fetch(`${API}/api/recordings/${id}/windows`);
+    if (wRes.ok) {
+      const windows = await wRes.json();
+      const labels   = windows.map(w => `${w.startSec.toFixed(0)}s`);
+      const colors   = windows.map(w =>
+        w.attentionLabel === 'חיובי'  ? '#22c55e' :
+        w.attentionLabel === 'הפרעה' ? '#ef4444' : '#94a3b8'
+      );
+      const values   = windows.map(w =>
+        w.attentionLabel === 'חיובי'  ? 1 :
+        w.attentionLabel === 'הפרעה' ? -1 : 0
+      );
+
+      timelineInstance = new Chart(document.getElementById('timelineChart'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'קשב לפי חלון',
+            data: values,
+            backgroundColor: colors,
+            borderWidth: 0,
+            barPercentage: 1.0,
+            categoryPercentage: 0.95
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const w = windows[ctx.dataIndex];
+                  const lbl = w.attentionLabel === 'חיובי' ? 'חיובי' :
+                              w.attentionLabel === 'הפרעה' ? 'הפרעה' : 'רעש';
+                  return `${lbl} | ${w.speakerType||''} | ${(w.speechRatio*100).toFixed(0)}% דיבור`;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              min: -1.2, max: 1.2,
+              ticks: {
+                callback: v => v === 1 ? 'חיובי' : v === -1 ? 'הפרעה' : 'רעש'
+              }
+            },
+            x: {
+              ticks: { maxTicksLimit: 12, font: { size: 10 } }
+            }
+          }
+        }
+      });
+    } else {
+      document.getElementById('modalWindowsError').style.display = '';
+      document.getElementById('modalWindowsError').textContent = 'אין נתוני חלונות לגרף ציר זמן';
+    }
+  } catch {
+    document.getElementById('modalWindowsError').style.display = '';
+    document.getElementById('modalWindowsError').textContent = 'שגיאה בטעינת גרף ציר הזמן';
+  }
+
+  document.getElementById('chartModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('chartModal').classList.remove('open');
+  if (timelineInstance) { timelineInstance.destroy(); timelineInstance = null; }
+}
+document.getElementById('chartModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// ===================================================
+// ניהול מורות — הוספת מורה חדשה
+// ===================================================
+
+// openAddTeacherModal — פותח את חלון ההוספת מורה
+function openAddTeacherModal() {
+  // ניקוי שדות מניסיון קודם
+  ['nt_name','nt_email','nt_user','nt_pass','nt_phone'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('addTeacherError').textContent = '';
+  document.getElementById('addTeacherModal').classList.add('open');
+}
+
+// closeAddTeacherModal — סגירת החלון
+function closeAddTeacherModal() {
+  document.getElementById('addTeacherModal').classList.remove('open');
+}
+
+// סגירה בלחיצה מחוץ לכרטיס
+document.getElementById('addTeacherModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeAddTeacherModal();
+});
+
+// submitAddTeacher — שולח POST /api/manage/teacher עם נתוני המורה החדשה
+async function submitAddTeacher() {
+  const errEl = document.getElementById('addTeacherError');
+  errEl.textContent = '';
+
+  // איסוף נתונים מהטופס
+  const body = {
+    fullName: document.getElementById('nt_name').value.trim(),
+    email:    document.getElementById('nt_email').value.trim(),
+    username: document.getElementById('nt_user').value.trim(),
+    password: document.getElementById('nt_pass').value,
+    phone:    document.getElementById('nt_phone').value.trim() || null
+  };
+
+  // ולידציה בצד הלקוח לפני שליחה לשרת
+  if (!body.fullName || !body.email || !body.username || !body.password) {
+    errEl.textContent = 'יש למלא את כל שדות החובה (*)';
+    return;
+  }
+  if (body.password.length < 4) {
+    errEl.textContent = 'הסיסמה חייבת להכיל לפחות 4 תווים';
+    return;
+  }
+
+  try {
+    // שליחת JSON ל-C# Controller (POST /api/manage/teacher)
+    const res = await fetch(`${API}/api/manage/teacher`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error || 'שגיאה בהוספת המורה';
+      return;
+    }
+    // הצלחה — סגירת המודאל ורענון רשימות
+    closeAddTeacherModal();
+    alert(`✓ ${data.message}`);
+    // רענון רשימת המורות בסינון
+    loadAnalyticsTeachers();
+  } catch {
+    errEl.textContent = 'שגיאת חיבור לשרת';
+  }
+}
+
+// ===================================================
+// ניהול שיעורים — הוספת שיעור למורה קיימת
+// ===================================================
+
+// openAddLessonModal — פותח את חלון הוספת שיעור וטוען רשימות
+async function openAddLessonModal() {
+  document.getElementById('addLessonError').textContent = '';
+  document.getElementById('addLessonModal').classList.add('open');
+
+  // טעינת רשימת מורות, כיתות ומקצועות מ-API
+  try {
+    const [teachersRes, classesRes, subjectsRes] = await Promise.all([
+      fetch(`${API}/api/manage/teachers`),
+      fetch(`${API}/api/manage/classes`),
+      fetch(`${API}/api/manage/subjects`)
+    ]);
+    const teachers  = await teachersRes.json();
+    const classes   = await classesRes.json();
+    const subjects  = await subjectsRes.json();
+
+    // מילוי dropdown המורות
+    const tSel = document.getElementById('nl_teacher');
+    tSel.innerHTML = '<option value="">בחר מורה...</option>';
+    teachers.forEach(t => tSel.add(new Option(t.name, t.id)));
+
+    // מילוי dropdown הכיתות
+    const cSel = document.getElementById('nl_class');
+    cSel.innerHTML = '<option value="">בחר כיתה...</option>';
+    classes.forEach(c => cSel.add(new Option(c.name, c.id)));
+
+    // מילוי dropdown המקצועות
+    const sSel = document.getElementById('nl_subject');
+    sSel.innerHTML = '<option value="">בחר מקצוע...</option>';
+    subjects.forEach(s => sSel.add(new Option(s.name, s.id)));
+  } catch {
+    document.getElementById('addLessonError').textContent = 'שגיאה בטעינת הנתונים';
+  }
+}
+
+// closeAddLessonModal — סגירת חלון הוספת שיעור
+function closeAddLessonModal() {
+  document.getElementById('addLessonModal').classList.remove('open');
+}
+
+document.getElementById('addLessonModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeAddLessonModal();
+});
+
+// submitAddLesson — שולח POST /api/manage/lesson עם פרטי השיעור החדש
+async function submitAddLesson() {
+  const errEl = document.getElementById('addLessonError');
+  errEl.textContent = '';
+
+  // איסוף נתונים מהטופס
+  const body = {
+    teacherId:  parseInt(document.getElementById('nl_teacher').value) || 0,
+    classId:    parseInt(document.getElementById('nl_class').value)   || 0,
+    subjectId:  parseInt(document.getElementById('nl_subject').value) || 0,
+    dayOfWeek:  parseInt(document.getElementById('nl_day').value),
+    lessonHour: parseInt(document.getElementById('nl_hour').value),
+    startTime:  document.getElementById('nl_start').value,
+    endTime:    document.getElementById('nl_end').value,
+    roomNumber: document.getElementById('nl_room').value.trim() || null
+  };
+
+  // ולידציה בצד הלקוח
+  if (!body.teacherId || !body.classId || !body.subjectId) {
+    errEl.textContent = 'יש לבחור מורה, כיתה ומקצוע';
+    return;
+  }
+  if (!body.startTime || !body.endTime) {
+    errEl.textContent = 'יש להזין שעת התחלה וסיום';
+    return;
+  }
+  if (body.startTime >= body.endTime) {
+    errEl.textContent = 'שעת הסיום חייבת להיות אחרי שעת ההתחלה';
+    return;
+  }
+
+  try {
+    // שליחת JSON ל-C# Controller (POST /api/manage/lesson)
+    const res = await fetch(`${API}/api/manage/lesson`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.error || 'שגיאה בהוספת השיעור';
+      return;
+    }
+    // הצלחה
+    closeAddLessonModal();
+    alert(`✓ ${data.message}`);
+    // רענון רשימת השיעורים כדי שהשיעור החדש יופיע מיד
+    loadAnalyticsTeachers();
+  } catch {
+    errEl.textContent = 'שגיאת חיבור לשרת';
+  }
+}
+</script>
+</body>
+</html>

@@ -86,10 +86,8 @@ services:
       # Temporary audio file storage
       - audio_temp:/app/temp
 
-  # Audio Receiver Service (C# / .NET)
-  # Captures audio from microphone or file input
-  # Manages buffering and queuing for processing
-  # Sends audio data to Audio Processor service
+  # Audio Receiver Service (C# / .NET 8)
+  # מקבל העלאות הקלטות, מכניס לתור, שולח לפייתון אחת-אחת
   audio-receiver:
     build:
       context: ./services/audio-receiver
@@ -100,16 +98,22 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
       ASPNETCORE_URLS: http://+:5002
-      AUDIO_PROCESSOR_URL: http://audio-processor:5000
-      API_GATEWAY_URL: http://api-gateway:3000
+      AudioProcessor__Url: http://audio-processor:5000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-qualitylearning}
+      DB_PASSWORD: ${DB_PASSWORD:-SecurePassword123!}
+      DB_NAME: ${DB_NAME:-quality_learning}
+      Storage__AudioPath: /app/audio
     depends_on:
-      - audio-processor
+      postgres:
+        condition: service_healthy
+      audio-processor:
+        condition: service_started
     networks:
       - quality-learning-network
     volumes:
-      # Mount source code for development
-      - ./services/audio-receiver/src:/app/src
-      # Raw audio file storage
+      # אחסון קבצי שמע גולמיים
       - audio_raw:/app/audio
 
   # Data Service (Node.js/Express)
